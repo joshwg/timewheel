@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">Time Wheel</div>
+        <div class="nav-links">
+            <a href="/dashboard" class="nav-link">Dashboard</a>
+            <a href="/admin/users" class="nav-link active">Users</a>
+            <a href="/about" class="nav-link">About</a>
+        </div>
+        <div class="nav-user">
+            <span class="username">{{.User.Username}}</span>
+            <div class="dropdown">
+                <button class="dropdown-toggle">▼</button>
+                <div class="dropdown-menu">
+                    <a href="/account" class="dropdown-item">Account Info</a>
+                    <hr class="dropdown-divider">
+                    <a href="/logout" class="dropdown-item">Logout</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="admin-panel">
+            <div class="admin-header">
+                <h1>User Management</h1>
+                <button class="btn btn-primary" onclick="showCreateModal()">Create New User</button>
+            </div>
+
+            <div class="users-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Username</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .Users}}
+                        <tr>
+                            <td>{{.ID}}</td>
+                            <td>{{.Username}}</td>
+                            <td>{{.Email}}</td>
+                            <td>{{if .IsAdmin}}<span class="badge badge-admin">Admin</span>{{else}}<span class="badge badge-user">User</span>{{end}}</td>
+                            <td>{{.CreatedAt.Format "Jan 2, 2006"}}</td>
+                            <td class="actions">
+                                <button class="btn-icon" onclick="showEditModal({{.ID}}, '{{.Username}}', '{{.Email}}', {{.IsAdmin}})" title="Edit">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                    </svg>
+                                </button>
+                                <form method="POST" action="/admin/users/update" style="display: inline;" onsubmit="return confirm('Are you sure you want to toggle admin status for {{.Username}}?');">
+                                    <input type="hidden" name="user_id" value="{{.ID}}">
+                                    <input type="hidden" name="action" value="toggle_admin">
+                                    <button type="submit" class="btn-icon" title="Toggle Admin">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                                            <path d="M2 17l10 5 10-5"></path>
+                                            <path d="M2 12l10 5 10-5"></path>
+                                        </svg>
+                                    </button>
+                                </form>
+                                <form method="POST" action="/admin/users/update" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete {{.Username}}? This action cannot be undone.');">
+                                    <input type="hidden" name="user_id" value="{{.ID}}">
+                                    <input type="hidden" name="action" value="delete">
+                                    <button type="submit" class="btn-icon btn-danger" title="Delete">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <polyline points="3 6 5 6 21 6"></polyline>
+                                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                        </svg>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create User Modal -->
+    <div id="createModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New User</h2>
+                <button class="modal-close" onclick="closeCreateModal()">&times;</button>
+            </div>
+            <form method="POST" action="/admin/users/create" id="createUserForm">
+                <div class="form-group">
+                    <label for="create_username">Username</label>
+                    <input type="text" id="create_username" name="username" minlength="3" required>
+                    <small class="field-hint">At least 3 characters. Only letters, numbers, and symbols: #$_-+=.</small>
+                    <small class="field-error" id="create_username_error"></small>
+                </div>
+
+                <div class="form-group">
+                    <label for="create_email">Email</label>
+                    <input type="email" id="create_email" name="email" required>
+                    <small class="field-error" id="create_email_error"></small>
+                </div>
+
+                <div class="form-group">
+                    <label for="create_password">Password</label>
+                    <div class="password-input-wrapper">
+                        <input type="password" id="create_password" name="password" minlength="6" required>
+                        <button type="button" class="password-toggle" onclick="toggleCreatePasswordVisibility()">
+                            <svg class="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                        </button>
+                    </div>
+                    <small class="field-hint">At least 6 characters</small>
+                    <small class="field-error" id="create_password_error"></small>
+                </div>
+
+                <div class="form-group">
+                    <label for="create_confirm_password">Confirm Password</label>
+                    <div class="password-input-wrapper">
+                        <input type="password" id="create_confirm_password" name="confirm_password" minlength="6" required>
+                        <button type="button" class="password-toggle" onclick="toggleCreateConfirmPasswordVisibility()">
+                            <svg class="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                        </button>
+                    </div>
+                    <small class="field-error" id="create_confirm_password_error"></small>
+                    <small class="field-success" id="create_confirm_password_success"></small>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="create_is_admin" name="is_admin" value="true">
+                        Administrator
+                    </label>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeCreateModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="createSubmitBtn" disabled>Create User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit User Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit User</h2>
+                <button class="modal-close" onclick="closeEditModal()">&times;</button>
+            </div>
+            <form method="POST" action="/admin/users/update">
+                <input type="hidden" id="edit_user_id" name="user_id">
+                <input type="hidden" name="action" value="edit">
+
+                <div class="form-group">
+                    <label for="edit_username">Username</label>
+                    <input type="text" id="edit_username" name="username" minlength="3" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="edit_email">Email</label>
+                    <input type="email" id="edit_email" name="email" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="edit_password">New Password (leave blank to keep current)</label>
+                    <div class="password-input-wrapper">
+                        <input type="password" id="edit_password" name="password" minlength="6">
+                        <button type="button" class="password-toggle" onclick="toggleEditPasswordVisibility()">
+                            <svg class="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; {{.Year}} Time Wheel. All rights reserved.</p>
+    </footer>
+
+    <script>
+        // Modal functions
+        function showCreateModal() {
+            document.getElementById('createModal').style.display = 'flex';
+            document.getElementById('create_username').focus();
+        }
+
+        function closeCreateModal() {
+            document.getElementById('createModal').style.display = 'none';
+            document.getElementById('createUserForm').reset();
+            clearValidationMessages();
+            updateCreateSubmitButton();
+        }
+
+        function showEditModal(id, username, email, isAdmin) {
+            document.getElementById('edit_user_id').value = id;
+            document.getElementById('edit_username').value = username;
+            document.getElementById('edit_email').value = email;
+            document.getElementById('editModal').style.display = 'flex';
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+
+        // Password toggle functions
+        function toggleCreatePasswordVisibility() {
+            const field = document.getElementById('create_password');
+            const button = field.nextElementSibling;
+            togglePasswordField(field, button);
+        }
+
+        function toggleCreateConfirmPasswordVisibility() {
+            const field = document.getElementById('create_confirm_password');
+            const button = field.nextElementSibling;
+            togglePasswordField(field, button);
+        }
+
+        function toggleEditPasswordVisibility() {
+            const field = document.getElementById('edit_password');
+            const button = field.nextElementSibling;
+            togglePasswordField(field, button);
+        }
+
+        function togglePasswordField(field, button) {
+            if (field.type === 'password') {
+                field.type = 'text';
+                button.classList.add('active');
+            } else {
+                field.type = 'password';
+                button.classList.remove('active');
+            }
+        }
+
+        // Validation functions
+        function validateUsername(username) {
+            if (username.length < 3) {
+                return 'Username must be at least 3 characters';
+            }
+            const validPattern = /^[a-zA-Z0-9#$_\-+=.]+$/;
+            if (!validPattern.test(username)) {
+                return 'Username can only contain letters, numbers, and symbols: #$_-+=.';
+            }
+            return null;
+        }
+
+        function validateEmail(email) {
+            const emailPattern = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
+            if (!emailPattern.test(email)) {
+                return 'Invalid email address format';
+            }
+            return null;
+        }
+
+        function validatePassword(password) {
+            if (password.length > 0 && password.length < 6) {
+                return 'Password must be at least 6 characters';
+            }
+            return null;
+        }
+
+        function clearValidationMessages() {
+            document.querySelectorAll('.field-error').forEach(el => el.textContent = '');
+            document.querySelectorAll('.field-success').forEach(el => el.textContent = '');
+        }
+
+        function updateCreateSubmitButton() {
+            const username = document.getElementById('create_username').value;
+            const email = document.getElementById('create_email').value;
+            const password = document.getElementById('create_password').value;
+            const confirmPassword = document.getElementById('create_confirm_password').value;
+
+            const usernameValid = username.length >= 3 && /^[a-zA-Z0-9#$_\-+=.]+$/.test(username);
+            const emailValid = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/.test(email);
+            const passwordValid = password.length >= 6;
+            const passwordsMatch = password === confirmPassword && password.length > 0;
+
+            const isValid = usernameValid && emailValid && passwordValid && passwordsMatch;
+            document.getElementById('createSubmitBtn').disabled = !isValid;
+        }
+
+        // Real-time validation
+        document.getElementById('create_username').addEventListener('input', function() {
+            const error = validateUsername(this.value);
+            const errorEl = document.getElementById('create_username_error');
+            errorEl.textContent = error || '';
+            updateCreateSubmitButton();
+        });
+
+        document.getElementById('create_email').addEventListener('input', function() {
+            const error = validateEmail(this.value);
+            const errorEl = document.getElementById('create_email_error');
+            errorEl.textContent = error || '';
+            updateCreateSubmitButton();
+        });
+
+        document.getElementById('create_password').addEventListener('input', function() {
+            const error = validatePassword(this.value);
+            const errorEl = document.getElementById('create_password_error');
+            errorEl.textContent = error || '';
+            updateCreateSubmitButton();
+            
+            // Also check confirm password match
+            const confirmPassword = document.getElementById('create_confirm_password').value;
+            if (confirmPassword) {
+                checkPasswordMatch();
+            }
+        });
+
+        document.getElementById('create_confirm_password').addEventListener('input', checkPasswordMatch);
+
+        function checkPasswordMatch() {
+            const password = document.getElementById('create_password').value;
+            const confirmPassword = document.getElementById('create_confirm_password').value;
+            const errorEl = document.getElementById('create_confirm_password_error');
+            const successEl = document.getElementById('create_confirm_password_success');
+
+            if (confirmPassword.length === 0) {
+                errorEl.textContent = '';
+                successEl.textContent = '';
+            } else if (password === confirmPassword) {
+                errorEl.textContent = '';
+                successEl.textContent = '✓ Passwords match!';
+            } else {
+                errorEl.textContent = 'Passwords do not match';
+                successEl.textContent = '';
+            }
+            updateCreateSubmitButton();
+        }
+
+        // Close modals on escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeCreateModal();
+                closeEditModal();
+            }
+        });
+
+        // Close modals on outside click
+        window.onclick = function(e) {
+            const createModal = document.getElementById('createModal');
+            const editModal = document.getElementById('editModal');
+            if (e.target === createModal) {
+                closeCreateModal();
+            }
+            if (e.target === editModal) {
+                closeEditModal();
+            }
+        };
+
+        // Dropdown menu functionality
+        document.querySelector('.dropdown-toggle').addEventListener('click', function(e) {
+            e.stopPropagation();
+            const menu = this.nextElementSibling;
+            menu.classList.toggle('show');
+        });
+
+        document.addEventListener('click', function() {
+            const menus = document.querySelectorAll('.dropdown-menu');
+            menus.forEach(menu => menu.classList.remove('show'));
+        });
+    </script>
+</body>
+</html>

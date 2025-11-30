@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <h1 class="auth-title">Time Wheel</h1>
+            <h2 class="auth-subtitle">PIN Login</h2>
+
+            {{if .Error}}
+            <div class="alert alert-error">{{.Error}}</div>
+            {{end}}
+
+            {{if .IsLocked}}
+            <div class="alert alert-error">
+                Too many failed PIN attempts. Your PIN login is temporarily locked.
+                <br><a href="/login" style="color: #fff; text-decoration: underline;">Use password login instead</a>
+            </div>
+            {{else if gt .FailedAttempts 0}}
+            <div class="alert alert-warning">
+                Failed attempts: {{.FailedAttempts}} of 3. After 3 failed attempts, PIN login will be locked for 15 minutes.
+            </div>
+            {{end}}
+
+            <form method="POST" action="/pin/login" class="auth-form">
+                <input type="hidden" name="username" value="{{.Username}}">
+
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" value="{{.Username}}" disabled class="input-disabled">
+                </div>
+
+                <div class="form-group">
+                    <label for="pin">PIN</label>
+                    <input type="password" id="pin" name="pin" maxlength="4" pattern="[0-9]{4}" required autofocus inputmode="numeric" {{if .IsLocked}}disabled{{end}}>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block" {{if .IsLocked}}disabled{{end}}>Login</button>
+            </form>
+
+            <div class="auth-links">
+                <p><a href="/login">Use password login instead</a></p>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; {{.Year}} Time Wheel. All rights reserved.</p>
+    </footer>
+</body>
+</html>

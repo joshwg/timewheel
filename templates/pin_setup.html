@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">Time Wheel</div>
+        <div class="nav-links">
+            <a href="/dashboard" class="nav-link">Dashboard</a>
+            {{if .User.IsAdmin}}
+            <a href="/admin/users" class="nav-link">Users</a>
+            {{end}}
+            <a href="/about" class="nav-link">About</a>
+        </div>
+        <div class="nav-user">
+            <span class="username">{{.User.Username}}</span>
+            <div class="dropdown">
+                <button class="dropdown-toggle">▼</button>
+                <div class="dropdown-menu">
+                    <a href="/account" class="dropdown-item">Account Info</a>
+                    <hr class="dropdown-divider">
+                    <a href="/logout" class="dropdown-item">Logout</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="pin-setup-card">
+            <h1>Setup PIN Login</h1>
+            <p class="subtitle">Create a 4-digit PIN for quick login on trusted devices.</p>
+
+            {{if .Error}}
+            <div class="alert alert-error">{{.Error}}</div>
+            {{end}}
+
+            <form method="POST" action="/pin/setup/save" class="auth-form" id="pinSetupForm">
+                <div class="form-group">
+                    <label for="pin">PIN (4 digits)</label>
+                    <input type="password" id="pin" name="pin" maxlength="4" pattern="[0-9]{4}" required autofocus inputmode="numeric">
+                    <small class="form-hint">Enter a 4-digit numeric PIN</small>
+                    <small class="field-error" id="pin_error"></small>
+                </div>
+
+                <div class="form-group">
+                    <label for="confirm_pin">Confirm PIN</label>
+                    <input type="password" id="confirm_pin" name="confirm_pin" maxlength="4" pattern="[0-9]{4}" required inputmode="numeric">
+                    <small class="field-error" id="confirm_pin_error"></small>
+                    <small class="field-success" id="confirm_pin_success"></small>
+                </div>
+
+                <div class="form-actions">
+                    <a href="/account" class="btn btn-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-primary" id="submitBtn" disabled>Setup PIN</button>
+                </div>
+            </form>
+
+            <div class="info-box">
+                <p><strong>Note:</strong> Your PIN will be used for quick login on this device. You can still use your password to login from any device.</p>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; {{.Year}} Time Wheel. All rights reserved.</p>
+    </footer>
+
+    <script>
+        const pinInput = document.getElementById('pin');
+        const confirmPinInput = document.getElementById('confirm_pin');
+        const submitBtn = document.getElementById('submitBtn');
+        const pinError = document.getElementById('pin_error');
+        const confirmPinError = document.getElementById('confirm_pin_error');
+        const confirmPinSuccess = document.getElementById('confirm_pin_success');
+
+        function validatePIN() {
+            const pin = pinInput.value;
+            const confirmPin = confirmPinInput.value;
+
+            // Clear all messages
+            pinError.textContent = '';
+            confirmPinError.textContent = '';
+            confirmPinSuccess.textContent = '';
+
+            let isValid = true;
+
+            // Validate PIN format
+            if (pin.length > 0) {
+                if (pin.length !== 4) {
+                    pinError.textContent = 'PIN must be exactly 4 digits';
+                    isValid = false;
+                } else if (!/^[0-9]{4}$/.test(pin)) {
+                    pinError.textContent = 'PIN must contain only numbers';
+                    isValid = false;
+                }
+            }
+
+            // Validate confirm PIN
+            if (confirmPin.length > 0) {
+                if (confirmPin.length !== 4) {
+                    confirmPinError.textContent = 'PIN must be exactly 4 digits';
+                    isValid = false;
+                } else if (!/^[0-9]{4}$/.test(confirmPin)) {
+                    confirmPinError.textContent = 'PIN must contain only numbers';
+                    isValid = false;
+                } else if (pin.length === 4 && confirmPin !== pin) {
+                    confirmPinError.textContent = 'PINs do not match';
+                    isValid = false;
+                } else if (pin === confirmPin && pin.length === 4) {
+                    confirmPinSuccess.textContent = '✓ PINs match!';
+                }
+            }
+
+            // Enable submit button only if both PINs are valid and match
+            const bothEntered = pin.length === 4 && confirmPin.length === 4;
+            const bothNumeric = /^[0-9]{4}$/.test(pin) && /^[0-9]{4}$/.test(confirmPin);
+            const pinsMatch = pin === confirmPin;
+
+            submitBtn.disabled = !(bothEntered && bothNumeric && pinsMatch && isValid);
+        }
+
+        pinInput.addEventListener('input', validatePIN);
+        confirmPinInput.addEventListener('input', validatePIN);
+
+        // Dropdown menu functionality
+        document.querySelector('.dropdown-toggle').addEventListener('click', function(e) {
+            e.stopPropagation();
+            const menu = this.nextElementSibling;
+            menu.classList.toggle('show');
+        });
+
+        document.addEventListener('click', function() {
+            const menus = document.querySelectorAll('.dropdown-menu');
+            menus.forEach(menu => menu.classList.remove('show'));
+        });
+    </script>
+</body>
+</html>

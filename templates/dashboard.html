@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">Time Wheel</div>
+        <div class="nav-links">
+            <a href="/dashboard" class="nav-link active">Dashboard</a>
+            {{if .User.IsAdmin}}
+            <a href="/admin/users" class="nav-link">Users</a>
+            {{end}}
+            <a href="/about" class="nav-link">About</a>
+        </div>
+        <div class="nav-user">
+            <span class="username">{{.User.Username}}</span>
+            <div class="dropdown">
+                <button class="dropdown-toggle">▼</button>
+                <div class="dropdown-menu">
+                    <a href="/account" class="dropdown-item">Account Info</a>
+                    <hr class="dropdown-divider">
+                    <a href="/logout" class="dropdown-item">Logout</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="dashboard">
+            <div class="welcome-section">
+                <h1>Welcome, {{.User.Username}}!</h1>
+                <div class="time-display" id="currentTime"></div>
+            </div>
+
+            {{if .Error}}
+            <div class="alert alert-error">{{.Error}}</div>
+            {{end}}
+
+            {{if .Success}}
+            <div class="alert alert-success">{{.Success}}</div>
+            {{end}}
+
+            <div class="dashboard-content">
+                <p>This is your personal dashboard. Use the navigation above to access different features.</p>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; {{.Year}} Time Wheel. All rights reserved.</p>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+        // Initialize time display
+        updateTime();
+        setInterval(updateTime, 1000);
+
+        // Dropdown menu functionality
+        document.querySelector('.dropdown-toggle').addEventListener('click', function(e) {
+            e.stopPropagation();
+            const menu = this.nextElementSibling;
+            menu.classList.toggle('show');
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function() {
+            const menus = document.querySelectorAll('.dropdown-menu');
+            menus.forEach(menu => menu.classList.remove('show'));
+        });
+    </script>
+</body>
+</html>

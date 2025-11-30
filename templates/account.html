@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">Time Wheel</div>
+        <div class="nav-links">
+            <a href="/dashboard" class="nav-link">Dashboard</a>
+            {{if .User.IsAdmin}}
+            <a href="/admin/users" class="nav-link">Users</a>
+            {{end}}
+            <a href="/about" class="nav-link">About</a>
+        </div>
+        <div class="nav-user">
+            <span class="username">{{.User.Username}}</span>
+            <div class="dropdown">
+                <button class="dropdown-toggle">▼</button>
+                <div class="dropdown-menu">
+                    <a href="/account" class="dropdown-item active">Account Info</a>
+                    <hr class="dropdown-divider">
+                    <a href="/logout" class="dropdown-item">Logout</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1>Account Information</h1>
+
+        {{if .Error}}
+        <div class="alert alert-error">
+            {{if eq .Error "password_required"}}Current password is required.
+            {{else if eq .Error "incorrect_password"}}Current password is incorrect.
+            {{else if eq .Error "invalid_email"}}Invalid email address format.
+            {{else if eq .Error "email_taken"}}Email address is already in use by another account.
+            {{else if eq .Error "password_mismatch"}}New passwords do not match.
+            {{else if eq .Error "password_too_short"}}New password must be at least 6 characters.
+            {{else if eq .Error "server_error"}}An error occurred. Please try again later.
+            {{else if eq .Error "pin_clear_failed"}}Failed to clear PIN. Please try again.
+            {{else}}{{.Error}}
+            {{end}}
+        </div>
+        {{end}}
+
+        {{if .Success}}
+        <div class="alert alert-success">
+            {{if eq .Success "profile_updated"}}Profile updated successfully!
+            {{else if eq .Success "pin_removed"}}PIN has been removed successfully.
+            {{else if eq .Success "pin_setup_complete"}}PIN setup complete! You can now use PIN login.
+            {{else}}{{.Success}}
+            {{end}}
+        </div>
+        {{end}}
+
+        <div class="account-sections">
+            <!-- Profile Information -->
+            <div class="card">
+                <h2>Profile Information</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <strong>Username:</strong>
+                        <span>{{.User.Username}}</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>Email:</strong>
+                        <span>{{.User.Email}}</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>Role:</strong>
+                        <span>{{if .User.IsAdmin}}Administrator{{else}}User{{end}}</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>Account Created:</strong>
+                        <span>{{.User.CreatedAt.Format "January 2, 2006"}}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PIN Login Section -->
+            <div class="card">
+                <h2>PIN Login</h2>
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    {{if .HasPIN}}
+                    <form method="POST" action="/pin/invalidate" style="display: inline;" onsubmit="return confirm('Are you sure you want to remove your PIN? You will need to set up a new PIN to use PIN login again.');">
+                        <button type="submit" class="btn btn-secondary">Remove PIN</button>
+                    </form>
+                    <p style="margin: 0;">PIN is currently configured. You can use it to log in quickly on trusted devices.</p>
+                    {{else}}
+                    <a href="/pin/setup" class="btn btn-primary">Setup PIN</a>
+                    <p style="margin: 0;">Set up a 4-digit PIN for quick login on trusted devices. You'll still be able to use your password.</p>
+                    {{end}}
+                </div>
+            </div>
+
+            {{if .User.IsAdmin}}
+            <!-- Admin User Notice -->
+            <div class="card">
+                <h2>Edit Profile</h2>
+                <p>As an administrator, please use the <a href="/admin/users">Users</a> page to edit your profile information.</p>
+            </div>
+            {{else}}
+            <!-- Edit Profile (Non-Admin Users) -->
+            <div class="card">
+                <h2>Edit Profile</h2>
+                <form method="POST" action="/profile/update" class="form">
+                    <div class="form-group">
+                        <label for="email">Email Address</label>
+                        <input type="email" id="email" name="email" value="{{.User.Email}}" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="current_password">Current Password</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="current_password" name="current_password" required>
+                            <button type="button" class="password-toggle" onclick="togglePasswordVisibility('current_password')">
+                                <svg class="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </button>
+                        </div>
+                        <small class="form-hint">Required to confirm changes</small>
+                    </div>
+
+                    <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #e1e8ed;">
+
+                    <h3 style="margin-bottom: 1rem; font-size: 1.1rem;">Change Password (Optional)</h3>
+
+                    <div class="form-group">
+                        <label for="new_password">New Password</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="new_password" name="new_password" minlength="6">
+                            <button type="button" class="password-toggle" onclick="togglePasswordVisibility('new_password')">
+                                <svg class="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </button>
+                        </div>
+                        <small class="form-hint">Leave blank to keep current password</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="confirm_password">Confirm New Password</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="confirm_password" name="confirm_password" minlength="6">
+                            <button type="button" class="password-toggle" onclick="togglePasswordVisibility('confirm_password')">
+                                <svg class="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">Update Profile</button>
+                </form>
+            </div>
+
+            <!-- Delete Account (Non-Admin Users) -->
+            <div class="card card-danger">
+                <h2>Delete Account</h2>
+                <p class="text-danger">Warning: This action cannot be undone. All your data will be permanently deleted.</p>
+                <form method="POST" action="/account/delete" onsubmit="return confirm('Are you absolutely sure you want to delete your account? This action cannot be undone.');">
+                    <div class="form-group">
+                        <label for="delete_password">Confirm Password</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="delete_password" name="password" required>
+                            <button type="button" class="password-toggle" onclick="togglePasswordVisibility('delete_password')">
+                                <svg class="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-danger">Delete My Account</button>
+                </form>
+            </div>
+            {{end}}
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; {{.Year}} Time Wheel. All rights reserved.</p>
+    </footer>
+
+    <script>
+        function togglePasswordVisibility(fieldId) {
+            const field = document.getElementById(fieldId);
+            const button = field.nextElementSibling;
+            
+            if (field.type === 'password') {
+                field.type = 'text';
+                button.classList.add('active');
+            } else {
+                field.type = 'password';
+                button.classList.remove('active');
+            }
+        }
+
+        // Dropdown menu functionality
+        document.querySelector('.dropdown-toggle').addEventListener('click', function(e) {
+            e.stopPropagation();
+            const menu = this.nextElementSibling;
+            menu.classList.toggle('show');
+        });
+
+        document.addEventListener('click', function() {
+            const menus = document.querySelectorAll('.dropdown-menu');
+            menus.forEach(menu => menu.classList.remove('show'));
+        });
+    </script>
+</body>
+</html>
