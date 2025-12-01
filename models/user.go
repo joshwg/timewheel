@@ -17,35 +17,47 @@ const (
 
 // User represents a user in the system
 type User struct {
-	ID           int
-	Username     string
-	Email        string
-	PasswordHash string
-	PINHash      string
-	IsAdmin      bool
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID                   int
+	Username             string
+	Email                string
+	Phone                string
+	PasswordHash         string
+	PINHash              string
+	IsAdmin              bool
+	NotificationTime     string
+	NotificationTimezone string
+	UseDST               bool
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
 }
 
 // UserResponse is the user data sent to clients (without sensitive data)
 type UserResponse struct {
-	ID        int       `json:"id"`
-	Username  string    `json:"username"`
-	Email     string    `json:"email"`
-	IsAdmin   bool      `json:"is_admin"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID                   int       `json:"id"`
+	Username             string    `json:"username"`
+	Email                string    `json:"email"`
+	Phone                string    `json:"phone"`
+	IsAdmin              bool      `json:"is_admin"`
+	NotificationTime     string    `json:"notification_time"`
+	NotificationTimezone string    `json:"notification_timezone"`
+	UseDST               bool      `json:"use_dst"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
 // ToUserResponse converts a User to UserResponse
 func (u *User) ToUserResponse() UserResponse {
 	return UserResponse{
-		ID:        u.ID,
-		Username:  u.Username,
-		Email:     u.Email,
-		IsAdmin:   u.IsAdmin,
-		CreatedAt: u.CreatedAt,
-		UpdatedAt: u.UpdatedAt,
+		ID:                   u.ID,
+		Username:             u.Username,
+		Email:                u.Email,
+		Phone:                u.Phone,
+		IsAdmin:              u.IsAdmin,
+		NotificationTime:     u.NotificationTime,
+		NotificationTimezone: u.NotificationTimezone,
+		UseDST:               u.UseDST,
+		CreatedAt:            u.CreatedAt,
+		UpdatedAt:            u.UpdatedAt,
 	}
 }
 

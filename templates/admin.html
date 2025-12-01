@@ -11,6 +11,7 @@
         <div class="nav-brand">Time Wheel</div>
         <div class="nav-links">
             <a href="/dashboard" class="nav-link">Dashboard</a>
+            <a href="/timecards" class="nav-link">Time Cards</a>
             <a href="/admin/users" class="nav-link active">Users</a>
             <a href="/about" class="nav-link">About</a>
         </div>
@@ -71,6 +72,7 @@
                             <th>ID</th>
                             <th>Username</th>
                             <th>Email</th>
+                            <th>Phone</th>
                             <th>Role</th>
                             <th>Created</th>
                             <th>Actions</th>
@@ -82,10 +84,11 @@
                             <td>{{.ID}}</td>
                             <td>{{.Username}}</td>
                             <td>{{.Email}}</td>
+                            <td>{{if .Phone}}{{formatPhone .Phone}}{{else}}-{{end}}</td>
                             <td>{{if .IsAdmin}}<span class="badge badge-admin">Admin</span>{{else}}<span class="badge badge-user">User</span>{{end}}</td>
                             <td>{{.CreatedAt.Format "Jan 2, 2006"}}</td>
                             <td class="actions">
-                                <button class="btn-icon" onclick="showEditModal({{.ID}}, '{{.Username}}', '{{.Email}}', {{.IsAdmin}})" title="Edit">
+                                <button class="btn-icon" onclick="showEditModal({{.ID}}, '{{.Username}}', '{{.Email}}', '{{.Phone}}', '{{.NotificationTime}}', '{{.NotificationTimezone}}', {{.UseDST}}, {{.IsAdmin}})" title="Edit">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
@@ -135,7 +138,6 @@
                     <small class="field-hint">At least 3 characters. Only letters, numbers, and symbols: #$_-+=.</small>
                     <small class="field-error" id="create_username_error"></small>
                 </div>
-
                 <div class="form-group">
                     <label for="create_email">Email</label>
                     <input type="email" id="create_email" name="email" required>
@@ -143,6 +145,38 @@
                 </div>
 
                 <div class="form-group">
+                    <label for="create_phone">Phone Number</label>
+                    <input type="tel" id="create_phone" name="phone" placeholder="+1234567890">
+                    <small class="field-hint">Optional. Used for SMS notifications.</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="create_notification_time">Notification Time</label>
+                    <input type="time" id="create_notification_time" name="notification_time" value="09:00" required>
+                    <small class="field-hint">Time of day to send daily SMS and email notifications (24-hour format).</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="create_notification_timezone">Time Zone</label>
+                    <select id="create_notification_timezone" name="notification_timezone" required>
+                        <option value="America/New_York">Eastern (ET)</option>
+                        <option value="America/Chicago">Central (CT)</option>
+                        <option value="America/Denver">Mountain (MT)</option>
+                        <option value="America/Los_Angeles">Pacific (PT)</option>
+                    </select>
+                    <small class="field-hint">User's timezone for notification scheduling.</small>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="create_use_dst" name="use_dst" value="true" checked>
+                        Use Daylight Saving Time
+                    </label>
+                    <small class="field-hint">Automatically adjust notification time for daylight saving time changes.</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="create_password">Password</label>
                     <label for="create_password">Password</label>
                     <div class="password-input-wrapper">
                         <input type="password" id="create_password" name="password" minlength="6" required>
@@ -197,15 +231,40 @@
             <form method="POST" action="/admin/users/update">
                 <input type="hidden" id="edit_user_id" name="user_id">
                 <input type="hidden" name="action" value="edit">
-
-                <div class="form-group">
-                    <label for="edit_username">Username</label>
-                    <input type="text" id="edit_username" name="username" minlength="3" required>
-                </div>
-
                 <div class="form-group">
                     <label for="edit_email">Email</label>
                     <input type="email" id="edit_email" name="email" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="edit_phone">Phone Number</label>
+                    <input type="tel" id="edit_phone" name="phone" placeholder="+1234567890">
+                    <small class="field-hint">Optional. Used for SMS notifications.</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="edit_notification_time">Notification Time</label>
+                    <input type="time" id="edit_notification_time" name="notification_time" required>
+                    <small class="field-hint">Time of day to send daily SMS and email notifications (24-hour format).</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="edit_notification_timezone">Time Zone</label>
+                    <select id="edit_notification_timezone" name="notification_timezone" required>
+                        <option value="America/New_York">Eastern (ET)</option>
+                        <option value="America/Chicago">Central (CT)</option>
+                        <option value="America/Denver">Mountain (MT)</option>
+                        <option value="America/Los_Angeles">Pacific (PT)</option>
+                    </select>
+                    <small class="field-hint">User's timezone for notification scheduling.</small>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="edit_use_dst" name="use_dst" value="true">
+                        Use Daylight Saving Time
+                    </label>
+                    <small class="field-hint">Automatically adjust notification time for daylight saving time changes.</small>
                 </div>
 
                 <div class="form-group">
@@ -244,7 +303,6 @@
         // Modal functions
         function showCreateModal() {
             document.getElementById('createModal').style.display = 'flex';
-            document.getElementById('create_username').focus();
         }
 
         function closeCreateModal() {
@@ -254,10 +312,14 @@
             updateCreateSubmitButton();
         }
 
-        function showEditModal(id, username, email, isAdmin) {
+        function showEditModal(id, username, email, phone, notificationTime, notificationTimezone, useDST, isAdmin) {
             document.getElementById('edit_user_id').value = id;
             document.getElementById('edit_username').value = username;
             document.getElementById('edit_email').value = email;
+            document.getElementById('edit_phone').value = phone || '';
+            document.getElementById('edit_notification_time').value = notificationTime || '09:00';
+            document.getElementById('edit_notification_timezone').value = notificationTimezone || 'America/New_York';
+            document.getElementById('edit_use_dst').checked = useDST;
             document.getElementById('editModal').style.display = 'flex';
         }
 

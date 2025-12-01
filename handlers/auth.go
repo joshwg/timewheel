@@ -27,7 +27,33 @@ var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-
 
 // InitTemplates initializes all templates
 func InitTemplates() {
-	templates = template.Must(template.ParseGlob("templates/*.html"))
+	funcMap := template.FuncMap{
+		"formatPhone": formatPhone,
+	}
+	templates = template.Must(template.New("").Funcs(funcMap).ParseGlob("templates/*.html"))
+}
+
+// formatPhone formats a phone number to (###) ###-#### format
+func formatPhone(phone string) string {
+	if phone == "" {
+		return ""
+	}
+
+	// Remove all non-digit characters
+	digits := regexp.MustCompile(`\D`).ReplaceAllString(phone, "")
+
+	// Format as (###) ###-#### if we have 10 digits
+	if len(digits) == 10 {
+		return "(" + digits[0:3] + ") " + digits[3:6] + "-" + digits[6:10]
+	}
+
+	// Format as +# (###) ###-#### if we have 11 digits starting with 1
+	if len(digits) == 11 && digits[0] == '1' {
+		return "+1 (" + digits[1:4] + ") " + digits[4:7] + "-" + digits[7:11]
+	}
+
+	// Return original if it doesn't match expected formats
+	return phone
 }
 
 // validateEmail checks if the email address is valid
@@ -129,12 +155,15 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Find user by username or email (case-insensitive)
 	var user models.User
-	var pinHash sql.NullString
+	var pinHash, phone sql.NullString
 	err := db.DB.QueryRow(
-		"SELECT id, username, email, password_hash, pin_hash, is_admin, created_at, updated_at FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?)",
+		"SELECT id, username, email, phone, password_hash, pin_hash, is_admin, notification_time, notification_timezone, use_dst, created_at, updated_at FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?)",
 		usernameOrEmail, usernameOrEmail,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &pinHash, &user.IsAdmin, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &phone, &user.PasswordHash, &pinHash, &user.IsAdmin, &user.NotificationTime, &user.NotificationTimezone, &user.UseDST, &user.CreatedAt, &user.UpdatedAt)
 
+	if phone.Valid {
+		user.Phone = phone.String
+	}
 	if pinHash.Valid {
 		user.PINHash = pinHash.String
 	}
@@ -323,14 +352,95 @@ func DashboardHandler(w http.ResponseWriter, r *http.Request) {
 		pinExists = false
 	}
 
+	// Get time cards due this week (all repeat types)
+	now := time.Now()
+	endOfWeek := now.AddDate(0, 0, 7)
+
+	thisWeekCards := []models.TimeCard{}
+	rows, err := db.DB.Query(`
+		SELECT id, user_id, title, description, send_sms, send_email, 
+		       repeat_type, repeat_every, day_of_week, day_of_month, 
+		       next_due, last_sent, reminder_days, reminder_count, last_reminder_sent, is_active, created_at, updated_at
+		FROM time_cards
+		WHERE user_id = ? AND is_active = 1 AND next_due <= ?
+		ORDER BY next_due ASC
+	`, user.ID, endOfWeek)
+
+	if err != nil {
+		log.Printf("Error fetching this week's time cards: %v", err)
+	} else {
+		defer rows.Close()
+		for rows.Next() {
+			var card models.TimeCard
+			var lastSent, lastReminderSent sql.NullTime
+			err := rows.Scan(&card.ID, &card.UserID, &card.Title, &card.Description,
+				&card.SendSMS, &card.SendEmail, &card.RepeatType, &card.RepeatEvery,
+				&card.DayOfWeek, &card.DayOfMonth, &card.NextDue, &lastSent,
+				&card.ReminderDays, &card.ReminderCount, &lastReminderSent, &card.IsActive, &card.CreatedAt, &card.UpdatedAt)
+			if err != nil {
+				log.Printf("Error scanning time card: %v", err)
+				continue
+			}
+			if lastSent.Valid {
+				card.LastSent = &lastSent.Time
+			}
+			if lastReminderSent.Valid {
+				card.LastReminderSent = &lastReminderSent.Time
+			}
+			thisWeekCards = append(thisWeekCards, card)
+		}
+	}
+
+	// Get monthly and yearly tasks due in next 10 days
+	next10Days := now.AddDate(0, 0, 10)
+
+	upcomingCards := []models.TimeCard{}
+	rows, err = db.DB.Query(`
+		SELECT id, user_id, title, description, send_sms, send_email, 
+		       repeat_type, repeat_every, day_of_week, day_of_month, 
+		       next_due, last_sent, reminder_days, reminder_count, last_reminder_sent, is_active, created_at, updated_at
+		FROM time_cards
+		WHERE user_id = ? AND is_active = 1 
+		      AND (repeat_type = 'monthly' OR repeat_type = 'yearly')
+		      AND next_due <= ?
+		ORDER BY next_due ASC
+	`, user.ID, next10Days)
+
+	if err != nil {
+		log.Printf("Error fetching upcoming time cards: %v", err)
+	} else {
+		defer rows.Close()
+		for rows.Next() {
+			var card models.TimeCard
+			var lastSent, lastReminderSent sql.NullTime
+			err := rows.Scan(&card.ID, &card.UserID, &card.Title, &card.Description,
+				&card.SendSMS, &card.SendEmail, &card.RepeatType, &card.RepeatEvery,
+				&card.DayOfWeek, &card.DayOfMonth, &card.NextDue, &lastSent,
+				&card.ReminderDays, &card.ReminderCount, &lastReminderSent, &card.IsActive, &card.CreatedAt, &card.UpdatedAt)
+			if err != nil {
+				log.Printf("Error scanning time card: %v", err)
+				continue
+			}
+			if lastSent.Valid {
+				card.LastSent = &lastSent.Time
+			}
+			if lastReminderSent.Valid {
+				card.LastReminderSent = &lastReminderSent.Time
+			}
+			upcomingCards = append(upcomingCards, card)
+		}
+	}
+
 	data := map[string]interface{}{
-		"Title":   "Dashboard - Time Wheel",
-		"Year":    time.Now().Year(),
-		"User":    user,
-		"Message": "Welcome to your dashboard",
-		"Error":   errorMsg,
-		"Success": successMsg,
-		"HasPIN":  pinExists,
+		"Title":         "Dashboard - Time Wheel",
+		"Year":          time.Now().Year(),
+		"User":          user,
+		"Message":       "Welcome to your dashboard",
+		"Error":         errorMsg,
+		"Success":       successMsg,
+		"HasPIN":        pinExists,
+		"ThisWeekCards": thisWeekCards,
+		"UpcomingCards": upcomingCards,
 	}
 
 	if err := templates.ExecuteTemplate(w, "dashboard.html", data); err != nil {
@@ -381,7 +491,7 @@ func AdminPanelHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Get all users
 	rows, err := db.DB.Query(
-		"SELECT id, username, email, is_admin, created_at FROM users ORDER BY created_at DESC",
+		"SELECT id, username, email, phone, is_admin, notification_time, notification_timezone, use_dst, created_at FROM users ORDER BY created_at DESC",
 	)
 	if err != nil {
 		log.Printf("Error fetching users: %v", err)
@@ -393,9 +503,13 @@ func AdminPanelHandler(w http.ResponseWriter, r *http.Request) {
 	var users []models.UserResponse
 	for rows.Next() {
 		var u models.UserResponse
-		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.IsAdmin, &u.CreatedAt); err != nil {
+		var phone sql.NullString
+		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &phone, &u.IsAdmin, &u.NotificationTime, &u.NotificationTimezone, &u.UseDST, &u.CreatedAt); err != nil {
 			log.Printf("Error scanning user: %v", err)
 			continue
+		}
+		if phone.Valid {
+			u.Phone = phone.String
 		}
 		users = append(users, u)
 	}
@@ -423,8 +537,18 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 
 	username := strings.TrimSpace(r.FormValue("username"))
 	email := strings.TrimSpace(r.FormValue("email"))
+	phone := strings.TrimSpace(r.FormValue("phone"))
 	password := r.FormValue("password")
 	isAdmin := r.FormValue("is_admin") == "true"
+	notificationTime := strings.TrimSpace(r.FormValue("notification_time"))
+	if notificationTime == "" {
+		notificationTime = "09:00"
+	}
+	notificationTimezone := strings.TrimSpace(r.FormValue("notification_timezone"))
+	if notificationTimezone == "" {
+		notificationTimezone = "America/New_York"
+	}
+	useDST := r.FormValue("use_dst") == "true"
 
 	// Validation
 	if username == "" || email == "" || password == "" {
@@ -487,8 +611,8 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Create user
 	_, err = db.DB.Exec(
-		"INSERT INTO users (username, email, password_hash, is_admin, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-		username, email, string(passwordHash), isAdmin, time.Now(), time.Now(),
+		"INSERT INTO users (username, email, phone, password_hash, is_admin, notification_time, notification_timezone, use_dst, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		username, email, phone, string(passwordHash), isAdmin, notificationTime, notificationTimezone, useDST, time.Now(), time.Now(),
 	)
 	if err != nil {
 		log.Printf("Error creating user: %v", err)
@@ -543,12 +667,21 @@ func UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch action {
 	case "edit":
-		// Admin can edit username, email, and optionally password
+		// Admin can edit username, email, phone, notification_time, notification_timezone, and optionally password
 		newUsername := strings.TrimSpace(r.FormValue("username"))
 		newEmail := strings.TrimSpace(r.FormValue("email"))
+		newPhone := strings.TrimSpace(r.FormValue("phone"))
+		newNotificationTime := strings.TrimSpace(r.FormValue("notification_time"))
+		newNotificationTimezone := strings.TrimSpace(r.FormValue("notification_timezone"))
+		newUseDST := r.FormValue("use_dst") == "true"
 		newPassword := r.FormValue("password")
 
-		// Validate username
+		if newNotificationTime == "" {
+			newNotificationTime = "09:00"
+		}
+		if newNotificationTimezone == "" {
+			newNotificationTimezone = "America/New_York"
+		} // Validate username
 		if newUsername == "" {
 			http.Redirect(w, r, "/admin/users?error=username_required", http.StatusSeeOther)
 			return
@@ -584,10 +717,10 @@ func UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Update username and email
+		// Update username, email, phone, notification_time, and notification_timezone
 		_, err = db.DB.Exec(
-			"UPDATE users SET username = ?, email = ?, updated_at = ? WHERE id = ?",
-			newUsername, newEmail, time.Now(), userID,
+			"UPDATE users SET username = ?, email = ?, phone = ?, notification_time = ?, notification_timezone = ?, use_dst = ?, updated_at = ? WHERE id = ?",
+			newUsername, newEmail, newPhone, newNotificationTime, newNotificationTimezone, newUseDST, time.Now(), userID,
 		)
 		if err != nil {
 			log.Printf("Error updating user: %v", err)
@@ -678,11 +811,20 @@ func UpdateProfileHandler(w http.ResponseWriter, r *http.Request) {
 	currentUser := middleware.GetCurrentUser(r)
 
 	newEmail := strings.TrimSpace(r.FormValue("email"))
+	newPhone := strings.TrimSpace(r.FormValue("phone"))
+	newNotificationTime := strings.TrimSpace(r.FormValue("notification_time"))
+	newNotificationTimezone := strings.TrimSpace(r.FormValue("notification_timezone"))
+	newUseDST := r.FormValue("use_dst") == "true"
 	currentPassword := r.FormValue("current_password")
 	newPassword := r.FormValue("new_password")
 	confirmPassword := r.FormValue("confirm_password")
 
-	// Validate current password first
+	if newNotificationTime == "" {
+		newNotificationTime = "09:00"
+	}
+	if newNotificationTimezone == "" {
+		newNotificationTimezone = "America/New_York"
+	} // Validate current password first
 	if currentPassword == "" {
 		http.Redirect(w, r, "/account?error=password_required", http.StatusSeeOther)
 		return
@@ -716,10 +858,10 @@ func UpdateProfileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update email
+	// Update email, phone, notification_time, and notification_timezone
 	_, err = db.DB.Exec(
-		"UPDATE users SET email = ?, updated_at = ? WHERE id = ?",
-		newEmail, time.Now(), currentUser.ID,
+		"UPDATE users SET email = ?, phone = ?, notification_time = ?, notification_timezone = ?, use_dst = ?, updated_at = ? WHERE id = ?",
+		newEmail, newPhone, newNotificationTime, newNotificationTimezone, newUseDST, time.Now(), currentUser.ID,
 	)
 	if err != nil {
 		log.Printf("Error updating email: %v", err)
@@ -918,7 +1060,7 @@ func validateSessionForHandler(token string) (*models.User, *models.Session, err
 // APIUsersHandler returns all users (admin only)
 func APIUsersHandler(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.DB.Query(
-		"SELECT id, username, email, is_admin, created_at FROM users ORDER BY created_at DESC",
+		"SELECT id, username, email, phone, is_admin, notification_time, created_at FROM users ORDER BY created_at DESC",
 	)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -930,12 +1072,29 @@ func APIUsersHandler(w http.ResponseWriter, r *http.Request) {
 	var users []models.UserResponse
 	for rows.Next() {
 		var u models.UserResponse
-		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.IsAdmin, &u.CreatedAt); err != nil {
+		var phone sql.NullString
+		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &phone, &u.IsAdmin, &u.NotificationTime, &u.CreatedAt); err != nil {
 			continue
+		}
+		if phone.Valid {
+			u.Phone = phone.String
 		}
 		users = append(users, u)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(users)
+}
+
+// AboutHandler handles the about page
+func AboutHandler(w http.ResponseWriter, r *http.Request) {
+	data := map[string]interface{}{
+		"Title": "About - Time Wheel",
+		"Year":  time.Now().Year(),
+	}
+
+	if err := templates.ExecuteTemplate(w, "about.html", data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"html/template"
 	"log"
 	"net/http"
 	"time"
@@ -10,8 +9,6 @@ import (
 	"github.com/josh/timewheel/handlers"
 	"github.com/josh/timewheel/middleware"
 )
-
-var templates *template.Template
 
 func main() {
 	// Initialize database
@@ -22,7 +19,6 @@ func main() {
 
 	// Initialize templates
 	handlers.InitTemplates()
-	templates = template.Must(template.ParseGlob("templates/*.html"))
 
 	// Start session cleanup routine
 	go sessionCleanupRoutine()
@@ -36,7 +32,7 @@ func main() {
 	// Registration disabled - admins create users via admin panel
 	// http.HandleFunc("/register", handlers.RegisterPageHandler)
 	http.HandleFunc("/", homeHandler)
-	http.HandleFunc("/about", aboutHandler)
+	http.HandleFunc("/about", handlers.AboutHandler)
 
 	// Authentication routes
 	http.HandleFunc("/api/login", handlers.LoginHandler)
@@ -64,6 +60,11 @@ func main() {
 	http.HandleFunc("/admin/users/update", middleware.AdminRequired(handlers.UpdateUserHandler))
 	http.HandleFunc("/api/admin/users", middleware.AdminRequired(handlers.APIUsersHandler))
 
+	// Time Card routes
+	http.HandleFunc("/timecards", middleware.AuthRequired(handlers.TimeCardsPageHandler))
+	http.HandleFunc("/timecards/create", middleware.AuthRequired(handlers.CreateTimeCardHandler))
+	http.HandleFunc("/timecards/update", middleware.AuthRequired(handlers.UpdateTimeCardHandler))
+
 	// Start server
 	port := ":8080"
 	log.Printf("Server starting on http://localhost%s", port)
@@ -86,18 +87,6 @@ func sessionCleanupRoutine() {
 func homeHandler(w http.ResponseWriter, r *http.Request) {
 	// Redirect root path to login page
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
-}
-
-func aboutHandler(w http.ResponseWriter, r *http.Request) {
-	data := map[string]interface{}{
-		"Title": "About - Time Wheel",
-		"Year":  time.Now().Year(),
-	}
-
-	if err := templates.ExecuteTemplate(w, "about.html", data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 }
 
 func timeAPIHandler(w http.ResponseWriter, r *http.Request) {

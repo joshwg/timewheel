@@ -113,12 +113,15 @@ func PINLoginPageHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Look up user to verify PIN exists
 	var user models.User
-	var pinHash sql.NullString
+	var pinHash, phone sql.NullString
 	err := db.DB.QueryRow(
-		"SELECT id, username, email, password_hash, pin_hash, is_admin, created_at, updated_at FROM users WHERE LOWER(username) = LOWER(?)",
+		"SELECT id, username, email, phone, password_hash, pin_hash, is_admin, notification_time, notification_timezone, created_at, updated_at FROM users WHERE LOWER(username) = LOWER(?)",
 		username,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &pinHash, &user.IsAdmin, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &phone, &user.PasswordHash, &pinHash, &user.IsAdmin, &user.NotificationTime, &user.NotificationTimezone, &user.CreatedAt, &user.UpdatedAt)
 
+	if phone.Valid {
+		user.Phone = phone.String
+	}
 	if pinHash.Valid {
 		user.PINHash = pinHash.String
 	}
@@ -213,12 +216,15 @@ func PINLoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Look up user
 	var user models.User
-	var pinHash sql.NullString
+	var pinHash, phone sql.NullString
 	err := db.DB.QueryRow(
-		"SELECT id, username, email, password_hash, pin_hash, is_admin, created_at, updated_at FROM users WHERE LOWER(username) = LOWER(?)",
+		"SELECT id, username, email, phone, password_hash, pin_hash, is_admin, notification_time, notification_timezone, use_dst, created_at, updated_at FROM users WHERE LOWER(username) = LOWER(?)",
 		username,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &pinHash, &user.IsAdmin, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &phone, &user.PasswordHash, &pinHash, &user.IsAdmin, &user.NotificationTime, &user.NotificationTimezone, &user.UseDST, &user.CreatedAt, &user.UpdatedAt)
 
+	if phone.Valid {
+		user.Phone = phone.String
+	}
 	if pinHash.Valid {
 		user.PINHash = pinHash.String
 	}

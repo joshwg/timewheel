@@ -11,6 +11,7 @@
         <div class="nav-brand">Time Wheel</div>
         <div class="nav-links">
             <a href="/dashboard" class="nav-link active">Dashboard</a>
+            <a href="/timecards" class="nav-link">Time Cards</a>
             {{if .User.IsAdmin}}
             <a href="/admin/users" class="nav-link">Users</a>
             {{end}}
@@ -41,11 +42,131 @@
             {{end}}
 
             {{if .Success}}
-            <div class="alert alert-success">{{.Success}}</div>
+            <div class="alert alert-success">
+                {{if eq .Success "timecard_completed"}}Task marked as completed! Next occurrence scheduled.
+                {{else}}{{.Success}}{{end}}
+            </div>
             {{end}}
 
             <div class="dashboard-content">
-                <p>This is your personal dashboard. Use the navigation above to access different features.</p>
+                <div class="dashboard-cards">
+                    <!-- Time Cards Due This Week -->
+                    <div class="info-card">
+                        <h2>Due This Week</h2>
+                        {{if .ThisWeekCards}}
+                        <div class="timecard-list">
+                            {{range .ThisWeekCards}}
+                            <div class="timecard-item">
+                                <div class="timecard-header" onclick="toggleExpand(this.parentElement)">
+                                    <div class="timecard-title-row">
+                                        <form method="POST" action="/timecards/update" style="display: inline; margin: 0;" onclick="event.stopPropagation();">
+                                            <input type="hidden" name="timecard_id" value="{{.ID}}">
+                                            <input type="hidden" name="action" value="complete">
+                                            <label class="checkbox-label" style="margin: 0; cursor: pointer; display: inline-flex; align-items: center;">
+                                                <input type="checkbox" onchange="this.form.submit()" title="Mark as completed" style="margin-right: 0.5rem;">
+                                                <span class="timecard-title">{{.Title}}</span>
+                                            </label>
+                                        </form>
+                                        <span class="expand-icon" style="cursor: pointer;">▼</span>
+                                    </div>
+                                    <div class="timecard-meta">
+                                        <span class="timecard-due">{{.NextDue.Format "Mon, Jan 2"}}</span>
+                                        <span class="timecard-repeat">{{if eq .RepeatType "weekly"}}Weekly{{else if eq .RepeatType "monthly"}}Monthly{{else if eq .RepeatType "yearly"}}Yearly{{end}}</span>
+                                    </div>
+                                </div>
+                                <div class="timecard-body">
+                                    {{if .Description}}
+                                    <p class="timecard-description">{{.Description}}</p>
+                                    {{end}}
+                                    <div class="timecard-details">
+                                        <div><strong>Due:</strong> {{.NextDue.Format "Monday, January 2, 2006"}}</div>
+                                        <div><strong>Repeat:</strong> 
+                                            {{if eq .RepeatType "weekly"}}
+                                                Every {{if eq .RepeatEvery 1}}{{else}}{{.RepeatEvery}} {{end}}week{{if ne .RepeatEvery 1}}s{{end}} on 
+                                                {{if eq .DayOfWeek 0}}Sunday
+                                                {{else if eq .DayOfWeek 1}}Monday
+                                                {{else if eq .DayOfWeek 2}}Tuesday
+                                                {{else if eq .DayOfWeek 3}}Wednesday
+                                                {{else if eq .DayOfWeek 4}}Thursday
+                                                {{else if eq .DayOfWeek 5}}Friday
+                                                {{else if eq .DayOfWeek 6}}Saturday{{end}}
+                                            {{else if eq .RepeatType "monthly"}}
+                                                Every {{if eq .RepeatEvery 1}}{{else}}{{.RepeatEvery}} {{end}}month{{if ne .RepeatEvery 1}}s{{end}} on day {{.DayOfMonth}}
+                                            {{else if eq .RepeatType "yearly"}}
+                                                Yearly
+                                            {{end}}
+                                        </div>
+                                        {{if or .SendSMS .SendEmail}}
+                                        <div><strong>Notifications:</strong> 
+                                            {{if .SendSMS}}SMS{{end}}
+                                            {{if and .SendSMS .SendEmail}}, {{end}}
+                                            {{if .SendEmail}}Email{{end}}
+                                        </div>
+                                        {{end}}
+                                    </div>
+                                </div>
+                            </div>
+                            {{end}}
+                        </div>
+                        {{else}}
+                        <p class="empty-message">No tasks due this week</p>
+                        {{end}}
+                    </div>
+
+                    <!-- Monthly/Yearly Tasks Due Next 10 Days -->
+                    <div class="info-card">
+                        <h2>Monthly & Yearly Tasks (Next 10 Days)</h2>
+                        {{if .UpcomingCards}}
+                        <div class="timecard-list">
+                            {{range .UpcomingCards}}
+                            <div class="timecard-item">
+                                <div class="timecard-header" onclick="toggleExpand(this.parentElement)">
+                                    <div class="timecard-title-row">
+                                        <form method="POST" action="/timecards/update" style="display: inline; margin: 0;" onclick="event.stopPropagation();">
+                                            <input type="hidden" name="timecard_id" value="{{.ID}}">
+                                            <input type="hidden" name="action" value="complete">
+                                            <label class="checkbox-label" style="margin: 0; cursor: pointer; display: inline-flex; align-items: center;">
+                                                <input type="checkbox" onchange="this.form.submit()" title="Mark as completed" style="margin-right: 0.5rem;">
+                                                <span class="timecard-title">{{.Title}}</span>
+                                            </label>
+                                        </form>
+                                        <span class="expand-icon" style="cursor: pointer;">▼</span>
+                                    </div>
+                                    <div class="timecard-meta">
+                                        <span class="timecard-due">{{.NextDue.Format "Mon, Jan 2"}}</span>
+                                        <span class="timecard-repeat">{{if eq .RepeatType "monthly"}}Monthly{{else if eq .RepeatType "yearly"}}Yearly{{end}}</span>
+                                    </div>
+                                </div>
+                                <div class="timecard-body">
+                                    {{if .Description}}
+                                    <p class="timecard-description">{{.Description}}</p>
+                                    {{end}}
+                                    <div class="timecard-details">
+                                        <div><strong>Due:</strong> {{.NextDue.Format "Monday, January 2, 2006"}}</div>
+                                        <div><strong>Repeat:</strong> 
+                                            {{if eq .RepeatType "monthly"}}
+                                                Every {{if eq .RepeatEvery 1}}{{else}}{{.RepeatEvery}} {{end}}month{{if ne .RepeatEvery 1}}s{{end}} on day {{.DayOfMonth}}
+                                            {{else if eq .RepeatType "yearly"}}
+                                                Yearly
+                                            {{end}}
+                                        </div>
+                                        {{if or .SendSMS .SendEmail}}
+                                        <div><strong>Notifications:</strong> 
+                                            {{if .SendSMS}}SMS{{end}}
+                                            {{if and .SendSMS .SendEmail}}, {{end}}
+                                            {{if .SendEmail}}Email{{end}}
+                                        </div>
+                                        {{end}}
+                                    </div>
+                                </div>
+                            </div>
+                            {{end}}
+                        </div>
+                        {{else}}
+                        <p class="empty-message">No monthly or yearly tasks due in the next 10 days</p>
+                        {{end}}
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -54,11 +175,32 @@
         <p>&copy; {{.Year}} Time Wheel. All rights reserved.</p>
     </footer>
 
-    <script src="/static/js/app.js"></script>
     <script>
+        // Update current time display
+        function updateTime() {
+            const now = new Date();
+            const options = { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            };
+            document.getElementById('currentTime').textContent = now.toLocaleDateString('en-US', options);
+        }
+
         // Initialize time display
         updateTime();
         setInterval(updateTime, 1000);
+
+        // Toggle expand/collapse for time card items
+        function toggleExpand(element) {
+            if (element) {
+                element.classList.toggle('expanded');
+            }
+        }
 
         // Dropdown menu functionality
         document.querySelector('.dropdown-toggle').addEventListener('click', function(e) {

@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">Time Wheel</div>
+        <div class="nav-links">
+            <a href="/dashboard" class="nav-link">Dashboard</a>
+            <a href="/timecards" class="nav-link active">Time Cards</a>
+            {{if .User.IsAdmin}}
+            <a href="/admin/users" class="nav-link">Users</a>
+            {{end}}
+            <a href="/about" class="nav-link">About</a>
+        </div>
+        <div class="nav-user">
+            <span class="username">{{.User.Username}}</span>
+            <div class="dropdown">
+                <button class="dropdown-toggle">▼</button>
+                <div class="dropdown-menu">
+                    <a href="/account" class="dropdown-item">Account Info</a>
+                    <hr class="dropdown-divider">
+                    <a href="/logout" class="dropdown-item">Logout</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="admin-header">
+            <h1>Time Cards</h1>
+            <button class="btn btn-primary" onclick="showCreateModal()">Create Time Card</button>
+        </div>
+
+        {{if .Error}}
+        <div class="alert alert-error">
+            {{if eq .Error "title_required"}}Title is required.
+            {{else if eq .Error "invalid_repeat_type"}}Invalid repeat type selected.
+            {{else if eq .Error "invalid_repeat_every"}}Repeat interval must be between 1 and 100.
+            {{else if eq .Error "invalid_day_of_week"}}Invalid day of week.
+            {{else if eq .Error "invalid_day_of_month"}}Invalid day of month.
+            {{else if eq .Error "invalid_reminder_days"}}Reminder days must be between 0 and 10.
+            {{else if eq .Error "timecard_not_found"}}Time card not found.
+            {{else if eq .Error "unauthorized"}}You don't have permission to modify this time card.
+            {{else if eq .Error "invalid_method"}}Invalid request method.
+            {{else if eq .Error "invalid_timecard_id"}}Invalid time card ID.
+            {{else if eq .Error "invalid_action"}}Invalid action.
+            {{else if eq .Error "server_error"}}An error occurred. Please try again later.
+            {{else}}{{.Error}}{{end}}
+        </div>
+        {{end}}
+
+        {{if .Success}}
+        <div class="alert alert-success">
+            {{if eq .Success "timecard_created"}}Time card created successfully.
+            {{else if eq .Success "timecard_updated"}}Time card updated successfully.
+            {{else if eq .Success "timecard_completed"}}Task marked as completed! Next occurrence scheduled.
+            {{else}}{{.Success}}{{end}}
+        </div>
+        {{end}}
+
+        <div class="users-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Repeat</th>
+                        <th>Next Due</th>
+                        <th>Notifications</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .TimeCards}}
+                    <tr>
+                        <td>
+                            <form method="POST" action="/timecards/update" style="display: inline;">
+                                <input type="hidden" name="timecard_id" value="{{.ID}}">
+                                <input type="hidden" name="action" value="complete">
+                                <label class="checkbox-label" style="margin: 0; cursor: pointer;">
+                                    <input type="checkbox" onchange="this.form.submit()" title="Mark as completed">
+                                    <strong style="margin-left: 0.5rem;">{{.Title}}</strong>
+                                </label>
+                            </form>
+                            {{if .Description}}<br><small>{{.Description}}</small>{{end}}
+                        </td>
+                        <td>
+                            {{if eq .RepeatType "weekly"}}
+                                Every {{if eq .RepeatEvery 1}}{{else}}{{.RepeatEvery}} {{end}}week{{if ne .RepeatEvery 1}}s{{end}} on 
+                                {{if eq .DayOfWeek 0}}Sunday
+                                {{else if eq .DayOfWeek 1}}Monday
+                                {{else if eq .DayOfWeek 2}}Tuesday
+                                {{else if eq .DayOfWeek 3}}Wednesday
+                                {{else if eq .DayOfWeek 4}}Thursday
+                                {{else if eq .DayOfWeek 5}}Friday
+                                {{else if eq .DayOfWeek 6}}Saturday{{end}}
+                            {{else if eq .RepeatType "monthly"}}
+                                Every {{if eq .RepeatEvery 1}}{{else}}{{.RepeatEvery}} {{end}}month{{if ne .RepeatEvery 1}}s{{end}} on day {{.DayOfMonth}}
+                            {{else if eq .RepeatType "yearly"}}
+                                Yearly
+                            {{end}}
+                        </td>
+                        <td>{{.NextDue.Format "Jan 2, 2006"}}</td>
+                        <td>
+                            {{if .SendSMS}}<span class="badge badge-user">SMS</span> {{end}}
+                            {{if .SendEmail}}<span class="badge badge-user">Email</span>{{end}}
+                            {{if not .SendSMS}}{{if not .SendEmail}}-{{end}}{{end}}
+                        </td>
+                        <td>
+                            {{if .IsActive}}
+                                <span class="badge badge-user">Active</span>
+                            {{else}}
+                                <span class="badge badge-admin">Paused</span>
+                            {{end}}
+                        </td>
+                        <td class="actions">
+                            <button class="btn-icon" onclick="showEditModal({{.ID}}, '{{.Title}}', '{{.Description}}', {{.SendSMS}}, {{.SendEmail}}, '{{.RepeatType}}', {{.RepeatEvery}}, {{.DayOfWeek}}, {{.DayOfMonth}}, {{.ReminderDays}})" title="Edit">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                </svg>
+                            </button>
+                            <form method="POST" action="/timecards/update" style="display: inline;">
+                                <input type="hidden" name="timecard_id" value="{{.ID}}">
+                                <input type="hidden" name="action" value="toggle_active">
+                                <button type="submit" class="btn-icon" title="{{if .IsActive}}Pause{{else}}Activate{{end}}">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        {{if .IsActive}}
+                                        <rect x="6" y="4" width="4" height="16"></rect>
+                                        <rect x="14" y="4" width="4" height="16"></rect>
+                                        {{else}}
+                                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                        {{end}}
+                                    </svg>
+                                </button>
+                            </form>
+                            <form method="POST" action="/timecards/update" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this time card? This action cannot be undone.');">
+                                <input type="hidden" name="timecard_id" value="{{.ID}}">
+                                <input type="hidden" name="action" value="delete">
+                                <button type="submit" class="btn-icon btn-danger" title="Delete">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                    </svg>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {{else}}
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 2rem;">
+                            No time cards yet. Click "Create Time Card" to get started.
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Create Time Card Modal -->
+    <div id="createModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create Time Card</h2>
+                <button class="modal-close" onclick="closeCreateModal()">&times;</button>
+            </div>
+            <form method="POST" action="/timecards/create">
+                <div class="form-group">
+                    <label for="create_title">Title *</label>
+                    <input type="text" id="create_title" name="title" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="create_description">Description</label>
+                    <textarea id="create_description" name="description" rows="4"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="create_repeat_type">Repeat *</label>
+                    <select id="create_repeat_type" name="repeat_type" onchange="updateCreateRepeatFields()" required>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="yearly">Yearly</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="create_repeat_every_group">
+                    <label for="create_repeat_every">Every</label>
+                    <input type="number" id="create_repeat_every" name="repeat_every" min="1" max="100" value="1">
+                    <small class="form-hint" id="create_repeat_hint">Number of weeks (1-100)</small>
+                </div>
+
+                <div class="form-group" id="create_day_of_week_group">
+                    <label for="create_day_of_week">Day of Week</label>
+                    <select id="create_day_of_week" name="day_of_week">
+                        <option value="0">Sunday</option>
+                        <option value="1">Monday</option>
+                        <option value="2">Tuesday</option>
+                        <option value="3">Wednesday</option>
+                        <option value="4">Thursday</option>
+                        <option value="5">Friday</option>
+                        <option value="6">Saturday</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="create_day_of_month_group" style="display: none;">
+                    <label for="create_day_of_month">Day of Month</label>
+                    <input type="number" id="create_day_of_month" name="day_of_month" min="1" max="31" value="1">
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="create_send_sms" name="send_sms">
+                        Send SMS notification
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="create_send_email" name="send_email">
+                        Send Email notification
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label for="create_reminder_days">Maximum daily reminders</label>
+                    <input type="number" id="create_reminder_days" name="reminder_days" min="0" max="10" value="0">
+                    <small class="form-hint">0-10 reminders. Send up to this many daily reminders if task not completed (0 = no reminders)</small>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeCreateModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Time Card</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Time Card Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Time Card</h2>
+                <button class="modal-close" onclick="closeEditModal()">&times;</button>
+            </div>
+            <form method="POST" action="/timecards/update">
+                <input type="hidden" id="edit_timecard_id" name="timecard_id">
+                <input type="hidden" name="action" value="edit">
+
+                <div class="form-group">
+                    <label for="edit_title">Title *</label>
+                    <input type="text" id="edit_title" name="title" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="edit_description">Description</label>
+                    <textarea id="edit_description" name="description" rows="4"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="edit_repeat_type">Repeat *</label>
+                    <select id="edit_repeat_type" name="repeat_type" onchange="updateEditRepeatFields()" required>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="yearly">Yearly</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="edit_repeat_every_group">
+                    <label for="edit_repeat_every">Every</label>
+                    <input type="number" id="edit_repeat_every" name="repeat_every" min="1" max="100" value="1">
+                    <small class="form-hint" id="edit_repeat_hint">Number of weeks (1-100)</small>
+                </div>
+
+                <div class="form-group" id="edit_day_of_week_group">
+                    <label for="edit_day_of_week">Day of Week</label>
+                    <select id="edit_day_of_week" name="day_of_week">
+                        <option value="0">Sunday</option>
+                        <option value="1">Monday</option>
+                        <option value="2">Tuesday</option>
+                        <option value="3">Wednesday</option>
+                        <option value="4">Thursday</option>
+                        <option value="5">Friday</option>
+                        <option value="6">Saturday</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="edit_day_of_month_group" style="display: none;">
+                    <label for="edit_day_of_month">Day of Month</label>
+                    <input type="number" id="edit_day_of_month" name="day_of_month" min="1" max="31" value="1">
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="edit_send_sms" name="send_sms">
+                        Send SMS notification
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="edit_send_email" name="send_email">
+                        Send Email notification
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label for="edit_reminder_days">Maximum daily reminders</label>
+                    <input type="number" id="edit_reminder_days" name="reminder_days" min="0" max="10" value="0">
+                    <small class="form-hint">0-10 reminders. Send up to this many daily reminders if task not completed (0 = no reminders)</small>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; {{.Year}} Time Wheel. All rights reserved.</p>
+    </footer>
+
+    <script>
+        function showCreateModal() {
+            document.getElementById('createModal').style.display = 'flex';
+            updateCreateRepeatFields();
+        }
+
+        function closeCreateModal() {
+            document.getElementById('createModal').style.display = 'none';
+            document.querySelector('#createModal form').reset();
+        }
+
+        function showEditModal(id, title, description, sendSMS, sendEmail, repeatType, repeatEvery, dayOfWeek, dayOfMonth, reminderDays) {
+            document.getElementById('edit_timecard_id').value = id;
+            document.getElementById('edit_title').value = title;
+            document.getElementById('edit_description').value = description;
+            document.getElementById('edit_send_sms').checked = sendSMS;
+            document.getElementById('edit_send_email').checked = sendEmail;
+            document.getElementById('edit_repeat_type').value = repeatType;
+            document.getElementById('edit_repeat_every').value = repeatEvery;
+            document.getElementById('edit_day_of_week').value = dayOfWeek;
+            document.getElementById('edit_day_of_month').value = dayOfMonth;
+            document.getElementById('edit_reminder_days').value = reminderDays || 0;
+            document.getElementById('editModal').style.display = 'flex';
+            updateEditRepeatFields();
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+
+        function updateCreateRepeatFields() {
+            const repeatType = document.getElementById('create_repeat_type').value;
+            const repeatEveryGroup = document.getElementById('create_repeat_every_group');
+            const dayOfWeekGroup = document.getElementById('create_day_of_week_group');
+            const dayOfMonthGroup = document.getElementById('create_day_of_month_group');
+            const repeatHint = document.getElementById('create_repeat_hint');
+
+            if (repeatType === 'weekly') {
+                repeatEveryGroup.style.display = 'flex';
+                dayOfWeekGroup.style.display = 'flex';
+                dayOfMonthGroup.style.display = 'none';
+                repeatHint.textContent = 'Number of weeks (1-100)';
+            } else if (repeatType === 'monthly') {
+                repeatEveryGroup.style.display = 'flex';
+                dayOfWeekGroup.style.display = 'none';
+                dayOfMonthGroup.style.display = 'flex';
+                repeatHint.textContent = 'Number of months (1-100)';
+            } else if (repeatType === 'yearly') {
+                repeatEveryGroup.style.display = 'none';
+                dayOfWeekGroup.style.display = 'none';
+                dayOfMonthGroup.style.display = 'none';
+            }
+        }
+
+        function updateEditRepeatFields() {
+            const repeatType = document.getElementById('edit_repeat_type').value;
+            const repeatEveryGroup = document.getElementById('edit_repeat_every_group');
+            const dayOfWeekGroup = document.getElementById('edit_day_of_week_group');
+            const dayOfMonthGroup = document.getElementById('edit_day_of_month_group');
+            const repeatHint = document.getElementById('edit_repeat_hint');
+
+            if (repeatType === 'weekly') {
+                repeatEveryGroup.style.display = 'flex';
+                dayOfWeekGroup.style.display = 'flex';
+                dayOfMonthGroup.style.display = 'none';
+                repeatHint.textContent = 'Number of weeks (1-100)';
+            } else if (repeatType === 'monthly') {
+                repeatEveryGroup.style.display = 'flex';
+                dayOfWeekGroup.style.display = 'none';
+                dayOfMonthGroup.style.display = 'flex';
+                repeatHint.textContent = 'Number of months (1-100)';
+            } else if (repeatType === 'yearly') {
+                repeatEveryGroup.style.display = 'none';
+                dayOfWeekGroup.style.display = 'none';
+                dayOfMonthGroup.style.display = 'none';
+            }
+        }
+
+        // Close modals on escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeCreateModal();
+                closeEditModal();
+            }
+        });
+
+        // Modals cannot be closed by clicking outside
+
+        // Dropdown menu functionality
+        document.querySelector('.dropdown-toggle').addEventListener('click', function(e) {
+            e.stopPropagation();
+            const menu = this.nextElementSibling;
+            menu.classList.toggle('show');
+        });
+
+        document.addEventListener('click', function() {
+            const menus = document.querySelectorAll('.dropdown-menu');
+            menus.forEach(menu => menu.classList.remove('show'));
+        });
+    </script>
+</body>
+</html>

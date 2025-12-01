@@ -458,6 +458,117 @@ body {
     color: #666;
 }
 
+.dashboard-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 2rem;
+}
+
+/* Time Card Items */
+.timecard-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.timecard-item {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+}
+
+.timecard-item:hover {
+    background: #e9ecef;
+    border-color: #0d6efd;
+}
+
+.timecard-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.timecard-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.timecard-title {
+    font-weight: 600;
+    color: #333;
+    font-size: 1.1rem;
+}
+
+.expand-icon {
+    color: #0d6efd;
+    transition: transform 0.3s ease;
+    font-size: 0.875rem;
+}
+
+.timecard-item.expanded .expand-icon {
+    transform: rotate(180deg);
+}
+
+.timecard-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.875rem;
+}
+
+.timecard-due {
+    color: #0d6efd;
+    font-weight: 500;
+}
+
+.timecard-repeat {
+    color: #6c757d;
+    padding: 0.125rem 0.5rem;
+    background: white;
+    border-radius: 4px;
+}
+
+.timecard-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.timecard-item.expanded .timecard-body {
+    max-height: 500px;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #dee2e6;
+}
+
+.timecard-description {
+    color: #666;
+    margin-bottom: 1rem;
+    line-height: 1.6;
+}
+
+.timecard-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: #495057;
+}
+
+.timecard-details strong {
+    color: #0d6efd;
+}
+
+.empty-message {
+    text-align: center;
+    color: #6c757d;
+    padding: 2rem;
+    font-style: italic;
+}
+
 /* Account Sections */
 .account-sections {
     display: flex;
@@ -726,6 +837,10 @@ body {
     }
 
     .info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-cards {
         grid-template-columns: 1fr;
     }
 }

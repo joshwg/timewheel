@@ -11,6 +11,7 @@
         <div class="nav-brand">Time Wheel</div>
         <div class="nav-links">
             <a href="/dashboard" class="nav-link">Dashboard</a>
+            <a href="/timecards" class="nav-link">Time Cards</a>
             {{if .User.IsAdmin}}
             <a href="/admin/users" class="nav-link">Users</a>
             {{end}}
@@ -71,6 +72,14 @@
                         <span>{{.User.Email}}</span>
                     </div>
                     <div class="info-item">
+                        <strong>Phone:</strong>
+                        <span>{{if .User.Phone}}{{formatPhone .User.Phone}}{{else}}<em>Not set</em>{{end}}</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>Notification Time:</strong>
+                        <span>{{.User.NotificationTime}} {{.User.NotificationTimezone}}</span>
+                    </div>
+                    <div class="info-item">
                         <strong>Role:</strong>
                         <span>{{if .User.IsAdmin}}Administrator{{else}}User{{end}}</span>
                     </div>
@@ -111,6 +120,37 @@
                     <div class="form-group">
                         <label for="email">Email Address</label>
                         <input type="email" id="email" name="email" value="{{.User.Email}}" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="phone">Phone Number</label>
+                        <input type="tel" id="phone" name="phone" value="{{.User.Phone}}" placeholder="+1234567890">
+                        <small class="form-hint">Optional. Used for SMS notifications.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="notification_time">Notification Time</label>
+                        <input type="time" id="notification_time" name="notification_time" value="{{.User.NotificationTime}}" required>
+                        <small class="form-hint">Time of day to receive daily SMS and email notifications (24-hour format).</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="notification_timezone">Time Zone</label>
+                        <select id="notification_timezone" name="notification_timezone" required>
+                            <option value="America/New_York" {{if eq .User.NotificationTimezone "America/New_York"}}selected{{end}}>Eastern (ET)</option>
+                            <option value="America/Chicago" {{if eq .User.NotificationTimezone "America/Chicago"}}selected{{end}}>Central (CT)</option>
+                            <option value="America/Denver" {{if eq .User.NotificationTimezone "America/Denver"}}selected{{end}}>Mountain (MT)</option>
+                            <option value="America/Los_Angeles" {{if eq .User.NotificationTimezone "America/Los_Angeles"}}selected{{end}}>Pacific (PT)</option>
+                        </select>
+                        <small class="form-hint">Your timezone for notification scheduling.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="use_dst" name="use_dst" value="true" {{if .User.UseDST}}checked{{end}}>
+                            Use Daylight Saving Time
+                        </label>
+                        <small class="form-hint">Automatically adjust notification time for daylight saving time changes.</small>
                     </div>
 
                     <div class="form-group">
