@@ -34,6 +34,36 @@
                 <button class="btn btn-primary" onclick="showCreateModal()">Create New User</button>
             </div>
 
+            {{if .Error}}
+            <div class="alert alert-error">
+                {{if eq .Error "missing_fields"}}All fields are required.
+                {{else if eq .Error "username_too_short"}}Username must be at least 3 characters.
+                {{else if eq .Error "invalid_username"}}Username can only contain letters, numbers, and symbols: #$_-+=.
+                {{else if eq .Error "invalid_email"}}Invalid email address format.
+                {{else if eq .Error "password_too_short"}}Password must be at least 6 characters.
+                {{else if eq .Error "username_taken"}}Username already taken.
+                {{else if eq .Error "email_taken"}}Email already registered.
+                {{else if eq .Error "username_email_taken"}}Username or email already taken by another user.
+                {{else if eq .Error "username_required"}}Username is required.
+                {{else if eq .Error "cannot_delete_self"}}Admin users cannot delete themselves. Please have another admin delete your account.
+                {{else if eq .Error "only_admin"}}Cannot remove your own admin status. You are the only administrator.
+                {{else if eq .Error "cannot_remove_own_admin"}}Cannot remove your own admin status. Please have another admin do this.
+                {{else if eq .Error "invalid_method"}}Invalid request method.
+                {{else if eq .Error "invalid_user_id"}}Invalid user ID.
+                {{else if eq .Error "invalid_action"}}Invalid action.
+                {{else if eq .Error "server_error"}}An error occurred. Please try again later.
+                {{else}}{{.Error}}{{end}}
+            </div>
+            {{end}}
+
+            {{if .Success}}
+            <div class="alert alert-success">
+                {{if eq .Success "user_created"}}User created successfully.
+                {{else if eq .Success "user_updated"}}User updated successfully.
+                {{else}}{{.Success}}{{end}}
+            </div>
+            {{end}}
+
             <div class="users-table">
                 <table>
                     <thead>
@@ -75,7 +105,7 @@
                                 <form method="POST" action="/admin/users/update" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete {{.Username}}? This action cannot be undone.');">
                                     <input type="hidden" name="user_id" value="{{.ID}}">
                                     <input type="hidden" name="action" value="delete">
-                                    <button type="submit" class="btn-icon btn-danger" title="Delete">
+                                    <button type="submit" class="btn-icon btn-danger" title="{{if eq .ID $.User.ID}}Cannot delete yourself{{else}}Delete{{end}}" {{if eq .ID $.User.ID}}disabled{{end}}>
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <polyline points="3 6 5 6 21 6"></polyline>
                                             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -189,6 +219,13 @@
                             </svg>
                         </button>
                     </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="edit_clear_pin" name="clear_pin" value="true">
+                        Clear user's PIN (they will need to set up a new PIN)
+                    </label>
                 </div>
 
                 <div class="modal-footer">
@@ -361,17 +398,7 @@
             }
         });
 
-        // Close modals on outside click
-        window.onclick = function(e) {
-            const createModal = document.getElementById('createModal');
-            const editModal = document.getElementById('editModal');
-            if (e.target === createModal) {
-                closeCreateModal();
-            }
-            if (e.target === editModal) {
-                closeEditModal();
-            }
-        };
+        // Modals cannot be closed by clicking outside
 
         // Dropdown menu functionality
         document.querySelector('.dropdown-toggle').addEventListener('click', function(e) {

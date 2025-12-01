@@ -84,6 +84,8 @@ func createTables() error {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		user_id INTEGER NOT NULL,
 		browser_id TEXT NOT NULL,
+		user_agent TEXT,
+		ip_address TEXT,
 		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		last_used DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		expires_at DATETIME,
@@ -125,12 +127,11 @@ func createDefaultAdmin() error {
 		"super", "changeme@domain.com", string(hashedPassword), true, time.Now(), time.Now(),
 	)
 
-	if err != nil {
-		return err
+	if err == nil {
+		log.Printf("Default admin: username=super, email=changeme@domain.com, password=abcd1234")
 	}
 
-	log.Println("Default admin user created: username=super, email=changeme@domain.com, password=abcd1234")
-	return nil
+	return err
 }
 
 // CleanupExpiredSessions removes expired sessions from the database

@@ -375,6 +375,10 @@ func AccountHandler(w http.ResponseWriter, r *http.Request) {
 func AdminPanelHandler(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetCurrentUser(r)
 
+	// Get error or success message from query parameters
+	errorMsg := r.URL.Query().Get("error")
+	successMsg := r.URL.Query().Get("success")
+
 	// Get all users
 	rows, err := db.DB.Query(
 		"SELECT id, username, email, is_admin, created_at FROM users ORDER BY created_at DESC",
@@ -397,10 +401,12 @@ func AdminPanelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]interface{}{
-		"Title": "Admin Panel - Time Wheel",
-		"Year":  time.Now().Year(),
-		"User":  user,
-		"Users": users,
+		"Title":   "Admin Panel - Time Wheel",
+		"Year":    time.Now().Year(),
+		"User":    user,
+		"Users":   users,
+		"Error":   errorMsg,
+		"Success": successMsg,
 	}
 
 	if err := templates.ExecuteTemplate(w, "admin.html", data); err != nil {
@@ -411,7 +417,7 @@ func AdminPanelHandler(w http.ResponseWriter, r *http.Request) {
 // CreateUserHandler allows admins to create new users
 func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Redirect(w, r, "/admin/users?error=invalid_method", http.StatusSeeOther)
 		return
 	}
 
@@ -422,29 +428,29 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Validation
 	if username == "" || email == "" || password == "" {
-		http.Error(w, "Username, email and password are required", http.StatusBadRequest)
+		http.Redirect(w, r, "/admin/users?error=missing_fields", http.StatusSeeOther)
 		return
 	}
 
 	if len(username) < 3 {
-		http.Error(w, "Username must be at least 3 characters", http.StatusBadRequest)
+		http.Redirect(w, r, "/admin/users?error=username_too_short", http.StatusSeeOther)
 		return
 	}
 
 	// Validate username contains only allowed characters
 	if !isValidUsername(username) {
-		http.Error(w, "Username can only contain letters, numbers, and the symbols: #$_-+=.", http.StatusBadRequest)
+		http.Redirect(w, r, "/admin/users?error=invalid_username", http.StatusSeeOther)
 		return
 	}
 
 	// Validate email format
 	if !validateEmail(email) {
-		http.Error(w, "Invalid email address format", http.StatusBadRequest)
+		http.Redirect(w, r, "/admin/users?error=invalid_email", http.StatusSeeOther)
 		return
 	}
 
 	if len(password) < 6 {
-		http.Error(w, "Password must be at least 6 characters", http.StatusBadRequest)
+		http.Redirect(w, r, "/admin/users?error=password_too_short", http.StatusSeeOther)
 		return
 	}
 
@@ -456,7 +462,7 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	).Scan(&exists)
 	if err != nil {
 		log.Printf("Error checking existing user: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		http.Redirect(w, r, "/admin/users?error=server_error", http.StatusSeeOther)
 		return
 	}
 	if exists > 0 {
@@ -464,9 +470,9 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 		var usernameExists int
 		db.DB.QueryRow("SELECT COUNT(*) FROM users WHERE LOWER(username) = LOWER(?)", username).Scan(&usernameExists)
 		if usernameExists > 0 {
-			http.Error(w, "Username already taken", http.StatusConflict)
+			http.Redirect(w, r, "/admin/users?error=username_taken", http.StatusSeeOther)
 		} else {
-			http.Error(w, "Email already registered", http.StatusConflict)
+			http.Redirect(w, r, "/admin/users?error=email_taken", http.StatusSeeOther)
 		}
 		return
 	}
@@ -475,7 +481,7 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		log.Printf("Error hashing password: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		http.Redirect(w, r, "/admin/users?error=server_error", http.StatusSeeOther)
 		return
 	}
 
@@ -486,17 +492,17 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil {
 		log.Printf("Error creating user: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		http.Redirect(w, r, "/admin/users?error=server_error", http.StatusSeeOther)
 		return
 	}
 
-	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/users?success=user_created", http.StatusSeeOther)
 }
 
 // UpdateUserHandler allows admins to update user information
 func UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Redirect(w, r, "/admin/users?error=invalid_method", http.StatusSeeOther)
 		return
 	}
 
@@ -504,7 +510,7 @@ func UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 	userIDStr := r.FormValue("user_id")
 	userID, err := strconv.Atoi(userIDStr)
 	if err != nil {
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		http.Redirect(w, r, "/admin/users?error=invalid_user_id", http.StatusSeeOther)
 		return
 	}
 
@@ -512,7 +518,7 @@ func UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Prevent admins from deleting themselves
 	if userID == currentUser.ID && action == "delete" {
-		http.Error(w, "Admin users cannot delete themselves. Please have another admin delete your account.", http.StatusForbidden)
+		http.Redirect(w, r, "/admin/users?error=cannot_delete_self", http.StatusSeeOther)
 		return
 	}
 
@@ -522,16 +528,16 @@ func UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 		err := db.DB.QueryRow("SELECT COUNT(*) FROM users WHERE is_admin = 1").Scan(&adminCount)
 		if err != nil {
 			log.Printf("Error counting admins: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Redirect(w, r, "/admin/users?error=server_error", http.StatusSeeOther)
 			return
 		}
 
 		if adminCount <= 1 {
-			http.Error(w, "Cannot remove your own admin status. You are the only administrator.", http.StatusForbidden)
+			http.Redirect(w, r, "/admin/users?error=only_admin", http.StatusSeeOther)
 			return
 		}
 
-		http.Error(w, "Cannot remove your own admin status. Please have another admin do this.", http.StatusForbidden)
+		http.Redirect(w, r, "/admin/users?error=cannot_remove_own_admin", http.StatusSeeOther)
 		return
 	}
 
@@ -544,21 +550,21 @@ func UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 
 		// Validate username
 		if newUsername == "" {
-			http.Error(w, "Username is required", http.StatusBadRequest)
+			http.Redirect(w, r, "/admin/users?error=username_required", http.StatusSeeOther)
 			return
 		}
 		if len(newUsername) < 3 {
-			http.Error(w, "Username must be at least 3 characters", http.StatusBadRequest)
+			http.Redirect(w, r, "/admin/users?error=username_too_short", http.StatusSeeOther)
 			return
 		}
 		if !isValidUsername(newUsername) {
-			http.Error(w, "Username can only contain letters, numbers, and the symbols: #$_-+=.", http.StatusBadRequest)
+			http.Redirect(w, r, "/admin/users?error=invalid_username", http.StatusSeeOther)
 			return
 		}
 
 		// Validate email
 		if !validateEmail(newEmail) {
-			http.Error(w, "Invalid email address format", http.StatusBadRequest)
+			http.Redirect(w, r, "/admin/users?error=invalid_email", http.StatusSeeOther)
 			return
 		}
 
@@ -570,11 +576,11 @@ func UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 		).Scan(&exists)
 		if err != nil {
 			log.Printf("Error checking existing user: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Redirect(w, r, "/admin/users?error=server_error", http.StatusSeeOther)
 			return
 		}
 		if exists > 0 {
-			http.Error(w, "Username or email already taken by another user", http.StatusConflict)
+			http.Redirect(w, r, "/admin/users?error=username_email_taken", http.StatusSeeOther)
 			return
 		}
 
@@ -585,21 +591,21 @@ func UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 		)
 		if err != nil {
 			log.Printf("Error updating user: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Redirect(w, r, "/admin/users?error=server_error", http.StatusSeeOther)
 			return
 		}
 
 		// If password is provided, update it
 		if newPassword != "" {
 			if len(newPassword) < 6 {
-				http.Error(w, "Password must be at least 6 characters", http.StatusBadRequest)
+				http.Redirect(w, r, "/admin/users?error=password_too_short", http.StatusSeeOther)
 				return
 			}
 
 			passwordHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 			if err != nil {
 				log.Printf("Error hashing password: %v", err)
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				http.Redirect(w, r, "/admin/users?error=server_error", http.StatusSeeOther)
 				return
 			}
 
@@ -609,8 +615,34 @@ func UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 			)
 			if err != nil {
 				log.Printf("Error updating password: %v", err)
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				http.Redirect(w, r, "/admin/users?error=server_error", http.StatusSeeOther)
 				return
+			}
+		}
+
+		// If clear_pin is checked, clear the user's PIN
+		clearPIN := r.FormValue("clear_pin") == "true"
+		if clearPIN {
+			_, err = db.DB.Exec(
+				"UPDATE users SET pin_hash = NULL, updated_at = ? WHERE id = ?",
+				time.Now(), userID,
+			)
+			if err != nil {
+				log.Printf("Error clearing PIN: %v", err)
+				http.Redirect(w, r, "/admin/users?error=server_error", http.StatusSeeOther)
+				return
+			}
+
+			// Delete all PIN attempts for this user
+			_, err = db.DB.Exec("DELETE FROM pin_attempts WHERE user_id = ?", userID)
+			if err != nil {
+				log.Printf("Error deleting PIN attempts: %v", err)
+			}
+
+			// Delete all PIN cookies for this user
+			_, err = db.DB.Exec("DELETE FROM pin_cookies WHERE user_id = ?", userID)
+			if err != nil {
+				log.Printf("Error deleting PIN cookies: %v", err)
 			}
 		}
 
@@ -623,17 +655,17 @@ func UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 		// Admins can delete any other user (including other admins), just not themselves
 		_, err = db.DB.Exec("DELETE FROM users WHERE id = ?", userID)
 	default:
-		http.Error(w, "Invalid action", http.StatusBadRequest)
+		http.Redirect(w, r, "/admin/users?error=invalid_action", http.StatusSeeOther)
 		return
 	}
 
 	if err != nil {
 		log.Printf("Error updating user: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		http.Redirect(w, r, "/admin/users?error=server_error", http.StatusSeeOther)
 		return
 	}
 
-	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/users?success=user_updated", http.StatusSeeOther)
 }
 
 // UpdateProfileHandler allows regular users to update their own email and password

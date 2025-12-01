@@ -67,7 +67,6 @@ func main() {
 	// Start server
 	port := ":8080"
 	log.Printf("Server starting on http://localhost%s", port)
-	log.Printf("Default admin: username=super, email=changeme@domain.com, password=abcd1234")
 	if err := http.ListenAndServe(port, nil); err != nil {
 		log.Fatal(err)
 	}

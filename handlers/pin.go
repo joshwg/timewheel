@@ -201,8 +201,13 @@ func PINLoginHandler(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("username")
 	pin := r.FormValue("pin")
 
-	if username == "" || pin == "" {
-		http.Redirect(w, r, "/pin-login?username="+username+"&error=missing_pin", http.StatusSeeOther)
+	if username == "" {
+		http.Redirect(w, r, "/login?error=missing_fields", http.StatusSeeOther)
+		return
+	}
+
+	if pin == "" {
+		http.Redirect(w, r, "/login?error=missing_fields", http.StatusSeeOther)
 		return
 	}
 

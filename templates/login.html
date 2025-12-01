@@ -28,23 +28,26 @@
             <div class="alert alert-error">{{.Error}}</div>
             {{end}}
 
-            {{if .ShowDefaultAdmin}}
-            <div class="alert alert-warning">
-                <strong>Security Warning:</strong> Default admin account detected with default password. 
-                Please change the password for user "super" immediately.
-            </div>
-            {{end}}
-
-            <form method="POST" action="/login" class="auth-form">
+            <form method="POST" action="/pin/login" class="auth-form" id="loginForm">
+                <input type="hidden" name="username" id="hidden_username">
+                
                 <div class="form-group">
-                    <label for="username_or_email">Username or Email</label>
-                    <input type="text" id="username_or_email" name="username_or_email" required autofocus>
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username_input" required autofocus autocomplete="username">
+                    <small class="field-error" id="username_error"></small>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" id="pinGroup">
+                    <label for="pin">PIN</label>
+                    <input type="password" id="pin" name="pin" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" autocomplete="off">
+                    <small class="form-hint">Enter your 4-digit PIN</small>
+                    <small class="field-error" id="pin_error"></small>
+                </div>
+
+                <div class="form-group" id="passwordGroup" style="display: none;">
                     <label for="password">Password</label>
                     <div class="password-input-wrapper">
-                        <input type="password" id="password" name="password" required>
+                        <input type="password" id="password" name="password">
                         <button type="button" class="password-toggle" onclick="togglePasswordVisibility()">
                             <svg class="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -52,34 +55,226 @@
                             </svg>
                         </button>
                     </div>
+                    <small class="field-error" id="password_error"></small>
                 </div>
 
-                <button type="submit" class="btn btn-primary btn-block">Login</button>
+                <button type="submit" class="btn btn-primary btn-block" id="submitButton" style="display: none;">Login</button>
             </form>
 
             <div class="auth-links">
-                <p>Don't have an account? Contact your administrator.</p>
+                <p><a href="#" onclick="toggleLoginMode(); return false;" id="toggleLink">Use password login instead</a></p>
             </div>
+
+            {{if .ShowDefaultAdmin}}
+                <div class="alert alert-warning" style="margin-top: 1.5rem;">
+                    <strong>Security Warning:</strong> Default admin account "super" with password "abcd1234" detected. 
+                    Please change the admin password immediately.
+                </div>
+            {{end}}
         </div>
     </div>
 
     <footer class="footer">
-        <p>&copy; {{.Year}} Time Wheel. All rights reserved.</p>
+        <p>&copy; {{.Year}} New Leaf Software, LLC.</p>
     </footer>
 
     <script>
+        const usernameField = document.getElementById('username');
+        const pinField = document.getElementById('pin');
+        const passwordField = document.getElementById('password');
+        const usernameError = document.getElementById('username_error');
+        const pinError = document.getElementById('pin_error');
+        const passwordError = document.getElementById('password_error');
+        const hiddenUsername = document.getElementById('hidden_username');
+        const loginForm = document.getElementById('loginForm');
+        const pinGroup = document.getElementById('pinGroup');
+        const passwordGroup = document.getElementById('passwordGroup');
+        const submitButton = document.getElementById('submitButton');
+        const toggleLink = document.getElementById('toggleLink');
+
+        // Check if PIN is locked from error parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const errorType = urlParams.get('error');
+        const isPINLocked = errorType === 'pin_locked';
+
+        let isPINMode = !isPINLocked; // Start in password mode if PIN is locked
+
+        // Clear PIN field on page load to ensure clean state
+        pinField.value = '';
+
+        // If PIN is locked, force password mode on page load
+        if (isPINLocked) {
+            pinGroup.style.display = 'none';
+            passwordGroup.style.display = 'block';
+            submitButton.style.display = 'block';
+            toggleLink.textContent = 'Use PIN login instead';
+            loginForm.action = '/api/login';
+            usernameField.name = 'username_or_email';
+            passwordField.required = true;
+            pinField.disabled = true; // Disable PIN field
+        }
+
+        // Toggle password visibility
         function togglePasswordVisibility() {
-            const field = document.getElementById('password');
-            const button = field.nextElementSibling;
+            const button = passwordField.nextElementSibling;
             
-            if (field.type === 'password') {
-                field.type = 'text';
+            if (passwordField.type === 'password') {
+                passwordField.type = 'text';
                 button.classList.add('active');
             } else {
-                field.type = 'password';
+                passwordField.type = 'password';
                 button.classList.remove('active');
             }
         }
+
+        // Toggle between PIN and password login
+        function toggleLoginMode() {
+            // Prevent switching to PIN mode if locked
+            if (!isPINMode && isPINLocked) {
+                alert('PIN login is locked due to too many failed attempts. Please use password login.');
+                return;
+            }
+
+            isPINMode = !isPINMode;
+            
+            if (isPINMode) {
+                // Switch to PIN mode
+                pinGroup.style.display = 'block';
+                passwordGroup.style.display = 'none';
+                submitButton.style.display = 'none';
+                toggleLink.textContent = 'Use password login instead';
+                loginForm.action = '/pin/login';
+                usernameField.name = 'username_input';
+                pinField.required = false;
+                pinField.disabled = false;
+                passwordField.required = false;
+                passwordField.value = '';
+                passwordError.textContent = '';
+                pinField.focus();
+            } else {
+                // Switch to password mode
+                pinGroup.style.display = 'none';
+                passwordGroup.style.display = 'block';
+                submitButton.style.display = 'block';
+                toggleLink.textContent = 'Use PIN login instead';
+                loginForm.action = '/api/login';
+                usernameField.name = 'username_or_email';
+                pinField.required = false;
+                passwordField.required = true;
+                pinField.value = '';
+                pinError.textContent = '';
+                passwordField.focus();
+            }
+        }
+
+        // Username validation
+        usernameField.addEventListener('input', function() {
+            const username = this.value.trim();
+            if (username.length > 0 && username.length < 3) {
+                usernameError.textContent = 'Username must be at least 3 characters';
+            } else {
+                usernameError.textContent = '';
+            }
+        });
+
+        // Enter key on username moves to PIN
+        usernameField.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const username = this.value.trim();
+                
+                if (!username) {
+                    usernameError.textContent = 'Username is required';
+                    return;
+                }
+                
+                if (username.length < 3) {
+                    usernameError.textContent = 'Username must be at least 3 characters';
+                    return;
+                }
+                
+                usernameError.textContent = '';
+                hiddenUsername.value = username;
+                pinField.focus();
+            }
+        });
+
+        // PIN validation - only allow numbers
+        pinField.addEventListener('input', function(e) {
+            // Remove non-numeric characters
+            this.value = this.value.replace(/[^0-9]/g, '');
+            
+            const pin = this.value;
+            
+            if (pin.length > 0 && pin.length < 4) {
+                pinError.textContent = 'PIN must be 4 digits';
+            } else {
+                pinError.textContent = '';
+            }
+            
+            // Auto-submit when 4 digits entered
+            if (pin.length === 4) {
+                const username = usernameField.value.trim();
+                
+                if (!username) {
+                    pinError.textContent = 'Please enter username first';
+                    usernameField.focus();
+                    this.value = '';
+                    return;
+                }
+                
+                if (username.length < 3) {
+                    pinError.textContent = 'Username must be at least 3 characters';
+                    usernameField.focus();
+                    this.value = '';
+                    return;
+                }
+                
+                // Set hidden username and submit
+                hiddenUsername.value = username;
+                loginForm.submit();
+            }
+        });
+
+        // Prevent non-numeric input in PIN field
+        pinField.addEventListener('keypress', function(e) {
+            if (e.key < '0' || e.key > '9') {
+                e.preventDefault();
+            }
+        });
+
+        // Password field validation
+        passwordField.addEventListener('input', function() {
+            if (this.value.length > 0 && this.value.length < 6) {
+                passwordError.textContent = 'Password must be at least 6 characters';
+            } else {
+                passwordError.textContent = '';
+            }
+        });
+
+        // Handle form submission
+        loginForm.addEventListener('submit', function(e) {
+            if (isPINMode) {
+                // PIN mode - prevent default form submission, auto-submit handled by PIN input
+                // This is just a fallback if submit button somehow gets clicked
+            } else {
+                // Password mode - normal form submission
+                const username = usernameField.value.trim();
+                const password = passwordField.value;
+                
+                if (!username || username.length < 3) {
+                    e.preventDefault();
+                    usernameError.textContent = 'Username must be at least 3 characters';
+                    return;
+                }
+                
+                if (!password || password.length < 6) {
+                    e.preventDefault();
+                    passwordError.textContent = 'Password must be at least 6 characters';
+                    return;
+                }
+            }
+        });
     </script>
 </body>
 </html>
