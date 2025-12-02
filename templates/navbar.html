@@ -1,0 +1,27 @@
+{{define "navbar"}}
+<nav class="navbar">
+    <div class="nav-brand">Time Wheel</div>
+    <div class="nav-links">
+        <a href="/dashboard" class="nav-link {{if eq .ActivePage "dashboard"}}active{{end}}">Dashboard</a>
+        <a href="/timecards" class="nav-link {{if eq .ActivePage "timecards"}}active{{end}}">Time Cards</a>
+        <a href="/logs" class="nav-link {{if eq .ActivePage "logs"}}active{{end}}">Activity Logs</a>
+        {{if .User.IsAdmin}}
+        <a href="/admin/users" class="nav-link {{if eq .ActivePage "admin"}}active{{end}}">Users</a>
+        {{end}}
+        <a href="/about" class="nav-link {{if eq .ActivePage "about"}}active{{end}}">About</a>
+    </div>
+    <div class="nav-user">
+        <div class="dropdown">
+            <button class="dropdown-toggle" style="display: flex; align-items: center; gap: 0.5rem;">
+                <span class="username">{{.User.Username}}</span>
+                <span>▼</span>
+            </button>
+            <div class="dropdown-menu">
+                <a href="/account" class="dropdown-item">Account Info</a>
+                <hr class="dropdown-divider">
+                <a href="/logout" class="dropdown-item">Logout</a>
+            </div>
+        </div>
+    </div>
+</nav>
+{{end}}

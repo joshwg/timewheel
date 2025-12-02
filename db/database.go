@@ -59,8 +59,6 @@ func createTables() error {
 		notification_timezone TEXT DEFAULT 'America/New_York',
 		use_dst BOOLEAN NOT NULL DEFAULT 1,
 		is_admin BOOLEAN NOT NULL DEFAULT 0,
-		is_admin BOOLEAN NOT NULL DEFAULT 0,
-		is_admin BOOLEAN NOT NULL DEFAULT 0,
 		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);
@@ -116,6 +114,7 @@ func createTables() error {
 		reminder_count INTEGER DEFAULT 0 CHECK(reminder_count >= 0),
 		last_reminder_sent DATETIME,
 		is_active BOOLEAN NOT NULL DEFAULT 1,
+		status TEXT NOT NULL DEFAULT 'READY' CHECK(status IN ('READY', 'TRIGGERED', 'DONE_SUCCESS', 'DONE_IGNORED', 'DONE_FAILED')),
 		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -139,6 +138,7 @@ func createTables() error {
 	CREATE INDEX IF NOT EXISTS idx_time_cards_user ON time_cards(user_id);
 	CREATE INDEX IF NOT EXISTS idx_time_cards_next_due ON time_cards(next_due);
 	CREATE INDEX IF NOT EXISTS idx_time_cards_active ON time_cards(is_active);
+	CREATE INDEX IF NOT EXISTS idx_time_cards_status ON time_cards(status);
 	CREATE INDEX IF NOT EXISTS idx_time_card_logs_card ON time_card_logs(time_card_id);
 	CREATE INDEX IF NOT EXISTS idx_time_card_logs_user ON time_card_logs(user_id);
 	CREATE INDEX IF NOT EXISTS idx_time_card_logs_type ON time_card_logs(log_type);
@@ -156,7 +156,10 @@ func createTables() error {
 	if err := migrateNotificationTime(); err != nil {
 		return err
 	}
-	return migrateUseDST()
+	if err := migrateUseDST(); err != nil {
+		return err
+	}
+	return migrateTimeCardStatus()
 }
 
 // createDefaultAdmin creates a default admin user if none exists
@@ -327,6 +330,38 @@ func migrateUseDST() error {
 			return err
 		}
 		log.Println("use_dst column added successfully")
+	}
+
+	return nil
+}
+
+// migrateTimeCardStatus adds status field to time_cards table if it doesn't exist
+func migrateTimeCardStatus() error {
+	// Check if status column exists
+	var exists int
+	err := DB.QueryRow(`
+		SELECT COUNT(*) FROM pragma_table_info('time_cards') 
+		WHERE name = 'status'
+	`).Scan(&exists)
+
+	if err != nil {
+		return err
+	}
+
+	// If column doesn't exist, add it
+	if exists == 0 {
+		log.Println("Adding status column to time_cards table...")
+		_, err = DB.Exec(`ALTER TABLE time_cards ADD COLUMN status TEXT NOT NULL DEFAULT 'READY' CHECK(status IN ('READY', 'TRIGGERED', 'DONE_SUCCESS', 'DONE_IGNORED', 'DONE_FAILED'))`)
+		if err != nil {
+			return err
+		}
+		log.Println("status column added successfully")
+
+		// Create index for status
+		_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_time_cards_status ON time_cards(status)`)
+		if err != nil {
+			log.Printf("Warning: Could not create status index: %v", err)
+		}
 	}
 
 	return nil

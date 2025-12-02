@@ -7,28 +7,7 @@
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <nav class="navbar">
-        <div class="nav-brand">Time Wheel</div>
-        <div class="nav-links">
-            <a href="/dashboard" class="nav-link">Dashboard</a>
-            <a href="/timecards" class="nav-link active">Time Cards</a>
-            {{if .User.IsAdmin}}
-            <a href="/admin/users" class="nav-link">Users</a>
-            {{end}}
-            <a href="/about" class="nav-link">About</a>
-        </div>
-        <div class="nav-user">
-            <span class="username">{{.User.Username}}</span>
-            <div class="dropdown">
-                <button class="dropdown-toggle">▼</button>
-                <div class="dropdown-menu">
-                    <a href="/account" class="dropdown-item">Account Info</a>
-                    <hr class="dropdown-divider">
-                    <a href="/logout" class="dropdown-item">Logout</a>
-                </div>
-            </div>
-        </div>
-    </nav>
+    {{template "navbar" .}}
 
     <div class="container">
         <div class="admin-header">
@@ -58,27 +37,29 @@
         <div class="alert alert-success">
             {{if eq .Success "timecard_created"}}Time card created successfully.
             {{else if eq .Success "timecard_updated"}}Time card updated successfully.
-            {{else if eq .Success "timecard_completed"}}Task marked as completed! Next occurrence scheduled.
+            {{else if eq .Success "timecard_completed"}}Task "{{.CompletedTitle}}" marked as completed! Next occurrence scheduled.
             {{else}}{{.Success}}{{end}}
         </div>
         {{end}}
 
         <div class="users-table">
-            <table>
+            <table id="timecardsTable">
                 <thead>
                     <tr>
-                        <th>Title</th>
-                        <th>Repeat</th>
-                        <th>Next Due</th>
-                        <th>Notifications</th>
-                        <th>Status</th>
+                        <th onclick="sortTable(0)" style="cursor: pointer;">Title <span class="sort-indicator"></span></th>
+                        <th onclick="sortTable(1)" style="cursor: pointer;">Repeat <span class="sort-indicator"></span></th>
+                        <th onclick="sortTable(2)" style="cursor: pointer;">Next Due <span class="sort-indicator"></span></th>
+                        <th onclick="sortTable(3)" style="cursor: pointer;">Notifications <span class="sort-indicator"></span></th>
+                        <th onclick="sortTable(4)" style="cursor: pointer;">Active <span class="sort-indicator"></span></th>
+                        <th onclick="sortTable(5)" style="cursor: pointer;">State <span class="sort-indicator"></span></th>
                         <th>Actions</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="timecardsTableBody">
                     {{range .TimeCards}}
-                    <tr>
+                    <tr data-title="{{.Title}}" data-repeat-days="{{if eq .RepeatType "weekly"}}{{.RepeatEvery}}{{else if eq .RepeatType "monthly"}}{{.RepeatEvery}}{{else}}365{{end}}" data-repeat-type="{{.RepeatType}}" data-next-due="{{.NextDue.Format "2006-01-02"}}" data-active="{{if .IsActive}}1{{else}}0{{end}}" data-status="{{.Status}}">
                         <td>
+                            {{if eq .Status "TRIGGERED"}}
                             <form method="POST" action="/timecards/update" style="display: inline;">
                                 <input type="hidden" name="timecard_id" value="{{.ID}}">
                                 <input type="hidden" name="action" value="complete">
@@ -87,6 +68,9 @@
                                     <strong style="margin-left: 0.5rem;">{{.Title}}</strong>
                                 </label>
                             </form>
+                            {{else}}
+                            <strong>{{.Title}}</strong>
+                            {{end}}
                             {{if .Description}}<br><small>{{.Description}}</small>{{end}}
                         </td>
                         <td>
@@ -112,11 +96,21 @@
                             {{if not .SendSMS}}{{if not .SendEmail}}-{{end}}{{end}}
                         </td>
                         <td>
-                            {{if .IsActive}}
-                                <span class="badge badge-user">Active</span>
-                            {{else}}
-                                <span class="badge badge-admin">Paused</span>
-                            {{end}}
+                            <form method="POST" action="/timecards/update" style="display: inline;">
+                                <input type="hidden" name="timecard_id" value="{{.ID}}">
+                                <input type="hidden" name="action" value="toggle_active">
+                                <button type="submit" class="badge {{if .IsActive}}badge-user{{else}}badge-admin{{end}}" style="border: none; cursor: pointer; padding: 0.25rem 0.75rem;" title="Click to {{if .IsActive}}pause{{else}}activate{{end}}">
+                                    {{if .IsActive}}Active{{else}}Paused{{end}}
+                                </button>
+                            </form>
+                        </td>
+                        <td>
+                            {{if eq .Status "READY"}}<span class="badge" style="background: #3b82f6;">Ready</span>
+                            {{else if eq .Status "TRIGGERED"}}<span class="badge" style="background: #f59e0b;">Triggered</span>
+                            {{else if eq .Status "DONE_SUCCESS"}}<span class="badge" style="background: #10b981;">Success</span>
+                            {{else if eq .Status "DONE_IGNORED"}}<span class="badge" style="background: #6b7280;">Ignored</span>
+                            {{else if eq .Status "DONE_FAILED"}}<span class="badge" style="background: #ef4444;">Failed</span>
+                            {{else}}<span class="badge">{{.Status}}</span>{{end}}
                         </td>
                         <td class="actions">
                             <button class="btn-icon" onclick="showEditModal({{.ID}}, '{{.Title}}', '{{.Description}}', {{.SendSMS}}, {{.SendEmail}}, '{{.RepeatType}}', {{.RepeatEvery}}, {{.DayOfWeek}}, {{.DayOfMonth}}, {{.ReminderDays}})" title="Edit">
@@ -151,9 +145,44 @@
                             </form>
                         </td>
                     </tr>
+                    {{if .RecentLogs}}
+                    <tr style="background-color: #f8f9fa;">
+                        <td colspan="7" style="padding: 0.5rem 1rem; border-top: none;">
+                            <details style="cursor: pointer;">
+                                <summary style="font-size: 0.9rem; color: #666; user-select: none;">
+                                    <strong>Recent Activity</strong> ({{len .RecentLogs}} entries)
+                                </summary>
+                                <div style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                                    {{range .RecentLogs}}
+                                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.75rem; background-color: white; border-left: 3px solid 
+                                        {{if eq .LogType "completed"}}#28a745
+                                        {{else if eq .LogType "sent"}}#007bff
+                                        {{else if eq .LogType "reminder_sent"}}#ffc107
+                                        {{else}}#6c757d{{end}}; border-radius: 3px;">
+                                        <div style="display: flex; gap: 0.75rem; align-items: center; flex: 1;">
+                                            <span class="badge" style="padding: 0.2rem 0.5rem; border-radius: 3px; font-size: 0.75rem; font-weight: 600; white-space: nowrap;
+                                                {{if eq .LogType "completed"}}background-color: #28a745; color: white;
+                                                {{else if eq .LogType "sent"}}background-color: #007bff; color: white;
+                                                {{else if eq .LogType "reminder_sent"}}background-color: #ffc107; color: black;
+                                                {{else}}background-color: #6c757d; color: white;{{end}}">
+                                                {{if eq .LogType "completed"}}Completed
+                                                {{else if eq .LogType "sent"}}Sent
+                                                {{else if eq .LogType "reminder_sent"}}Reminder
+                                                {{else}}{{.LogType}}{{end}}
+                                            </span>
+                                            <span style="color: #555; font-size: 0.85rem;">{{.Message}}</span>
+                                        </div>
+                                        <span style="font-size: 0.8rem; color: #888; white-space: nowrap;">{{.CreatedAt.Format "Jan 2, 3:04 PM"}}</span>
+                                    </div>
+                                    {{end}}
+                                </div>
+                            </details>
+                        </td>
+                    </tr>
+                    {{end}}
                     {{else}}
                     <tr>
-                        <td colspan="6" style="text-align: center; padding: 2rem;">
+                        <td colspan="7" style="text-align: center; padding: 2rem;">
                             No time cards yet. Click "Create Time Card" to get started.
                         </td>
                     </tr>
@@ -214,6 +243,12 @@
                     <input type="number" id="create_day_of_month" name="day_of_month" min="1" max="31" value="1">
                 </div>
 
+                <div class="form-group" id="create_next_due_date_group" style="display: none;">
+                    <label for="create_next_due_date">Next Due Date</label>
+                    <input type="date" id="create_next_due_date" name="next_due_date">
+                    <small class="form-hint">For multi-month repeats, set when the first occurrence should be (leave blank for auto-calculation)</small>
+                </div>
+
                 <div class="form-group">
                     <label class="checkbox-label">
                         <input type="checkbox" id="create_send_sms" name="send_sms">
@@ -236,102 +271,51 @@
 
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" onclick="closeCreateModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Create Time Card</button>
+                    <button type="submit" class="btn btn-primary" id="createSubmitBtn" disabled>Create Time Card</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Edit Time Card Modal -->
-    <div id="editModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Edit Time Card</h2>
-                <button class="modal-close" onclick="closeEditModal()">&times;</button>
-            </div>
-            <form method="POST" action="/timecards/update">
-                <input type="hidden" id="edit_timecard_id" name="timecard_id">
-                <input type="hidden" name="action" value="edit">
+    {{template "timecard_modal" .}}
 
-                <div class="form-group">
-                    <label for="edit_title">Title *</label>
-                    <input type="text" id="edit_title" name="title" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="edit_description">Description</label>
-                    <textarea id="edit_description" name="description" rows="4"></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label for="edit_repeat_type">Repeat *</label>
-                    <select id="edit_repeat_type" name="repeat_type" onchange="updateEditRepeatFields()" required>
-                        <option value="weekly">Weekly</option>
-                        <option value="monthly">Monthly</option>
-                        <option value="yearly">Yearly</option>
-                    </select>
-                </div>
-
-                <div class="form-group" id="edit_repeat_every_group">
-                    <label for="edit_repeat_every">Every</label>
-                    <input type="number" id="edit_repeat_every" name="repeat_every" min="1" max="100" value="1">
-                    <small class="form-hint" id="edit_repeat_hint">Number of weeks (1-100)</small>
-                </div>
-
-                <div class="form-group" id="edit_day_of_week_group">
-                    <label for="edit_day_of_week">Day of Week</label>
-                    <select id="edit_day_of_week" name="day_of_week">
-                        <option value="0">Sunday</option>
-                        <option value="1">Monday</option>
-                        <option value="2">Tuesday</option>
-                        <option value="3">Wednesday</option>
-                        <option value="4">Thursday</option>
-                        <option value="5">Friday</option>
-                        <option value="6">Saturday</option>
-                    </select>
-                </div>
-
-                <div class="form-group" id="edit_day_of_month_group" style="display: none;">
-                    <label for="edit_day_of_month">Day of Month</label>
-                    <input type="number" id="edit_day_of_month" name="day_of_month" min="1" max="31" value="1">
-                </div>
-
-                <div class="form-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="edit_send_sms" name="send_sms">
-                        Send SMS notification
-                    </label>
-                </div>
-
-                <div class="form-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="edit_send_email" name="send_email">
-                        Send Email notification
-                    </label>
-                </div>
-
-                <div class="form-group">
-                    <label for="edit_reminder_days">Maximum daily reminders</label>
-                    <input type="number" id="edit_reminder_days" name="reminder_days" min="0" max="10" value="0">
-                    <small class="form-hint">0-10 reminders. Send up to this many daily reminders if task not completed (0 = no reminders)</small>
-                </div>
-
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <footer class="footer">
-        <p>&copy; {{.Year}} Time Wheel. All rights reserved.</p>
-    </footer>
+    {{template "footer" .}}
 
     <script>
         function showCreateModal() {
+            // Load saved preferences from localStorage
+            const saved = localStorage.getItem('timecardPreferences');
+            if (saved) {
+                try {
+                    const prefs = JSON.parse(saved);
+                    if (prefs.sendSMS !== undefined) document.getElementById('create_send_sms').checked = prefs.sendSMS;
+                    if (prefs.sendEmail !== undefined) document.getElementById('create_send_email').checked = prefs.sendEmail;
+                    if (prefs.repeatType) document.getElementById('create_repeat_type').value = prefs.repeatType;
+                    if (prefs.repeatEvery) document.getElementById('create_repeat_every').value = prefs.repeatEvery;
+                    if (prefs.dayOfWeek !== undefined) document.getElementById('create_day_of_week').value = prefs.dayOfWeek;
+                    if (prefs.dayOfMonth) document.getElementById('create_day_of_month').value = prefs.dayOfMonth;
+                    if (prefs.reminderDays !== undefined) document.getElementById('create_reminder_days').value = prefs.reminderDays;
+                } catch (e) {
+                    console.error('Error loading preferences:', e);
+                }
+            }
             document.getElementById('createModal').style.display = 'flex';
             updateCreateRepeatFields();
+            updateCreateSubmitButton();
+        }
+
+        function saveCreatePreferences() {
+            // Save current form values to localStorage
+            const prefs = {
+                sendSMS: document.getElementById('create_send_sms').checked,
+                sendEmail: document.getElementById('create_send_email').checked,
+                repeatType: document.getElementById('create_repeat_type').value,
+                repeatEvery: document.getElementById('create_repeat_every').value,
+                dayOfWeek: parseInt(document.getElementById('create_day_of_week').value),
+                dayOfMonth: parseInt(document.getElementById('create_day_of_month').value),
+                reminderDays: parseInt(document.getElementById('create_reminder_days').value)
+            };
+            localStorage.setItem('timecardPreferences', JSON.stringify(prefs));
         }
 
         function closeCreateModal() {
@@ -339,80 +323,193 @@
             document.querySelector('#createModal form').reset();
         }
 
-        function showEditModal(id, title, description, sendSMS, sendEmail, repeatType, repeatEvery, dayOfWeek, dayOfMonth, reminderDays) {
-            document.getElementById('edit_timecard_id').value = id;
-            document.getElementById('edit_title').value = title;
-            document.getElementById('edit_description').value = description;
-            document.getElementById('edit_send_sms').checked = sendSMS;
-            document.getElementById('edit_send_email').checked = sendEmail;
-            document.getElementById('edit_repeat_type').value = repeatType;
-            document.getElementById('edit_repeat_every').value = repeatEvery;
-            document.getElementById('edit_day_of_week').value = dayOfWeek;
-            document.getElementById('edit_day_of_month').value = dayOfMonth;
-            document.getElementById('edit_reminder_days').value = reminderDays || 0;
-            document.getElementById('editModal').style.display = 'flex';
-            updateEditRepeatFields();
-        }
-
-        function closeEditModal() {
-            document.getElementById('editModal').style.display = 'none';
-        }
-
         function updateCreateRepeatFields() {
             const repeatType = document.getElementById('create_repeat_type').value;
+            const repeatEvery = parseInt(document.getElementById('create_repeat_every').value) || 1;
             const repeatEveryGroup = document.getElementById('create_repeat_every_group');
             const dayOfWeekGroup = document.getElementById('create_day_of_week_group');
             const dayOfMonthGroup = document.getElementById('create_day_of_month_group');
+            const nextDueDateGroup = document.getElementById('create_next_due_date_group');
             const repeatHint = document.getElementById('create_repeat_hint');
 
             if (repeatType === 'weekly') {
                 repeatEveryGroup.style.display = 'flex';
                 dayOfWeekGroup.style.display = 'flex';
                 dayOfMonthGroup.style.display = 'none';
+                nextDueDateGroup.style.display = 'none';
                 repeatHint.textContent = 'Number of weeks (1-100)';
             } else if (repeatType === 'monthly') {
                 repeatEveryGroup.style.display = 'flex';
                 dayOfWeekGroup.style.display = 'none';
                 dayOfMonthGroup.style.display = 'flex';
+                // Show next_due_date for multi-month repeats (every 2+ months)
+                nextDueDateGroup.style.display = repeatEvery > 1 ? 'flex' : 'none';
                 repeatHint.textContent = 'Number of months (1-100)';
             } else if (repeatType === 'yearly') {
                 repeatEveryGroup.style.display = 'none';
                 dayOfWeekGroup.style.display = 'none';
                 dayOfMonthGroup.style.display = 'none';
+                nextDueDateGroup.style.display = 'flex';
+            }
+            
+            // Set default next_due_date
+            if ((repeatType === 'monthly' && repeatEvery > 1) || repeatType === 'yearly') {
+                const nextDueDateInput = document.getElementById('create_next_due_date');
+                if (!nextDueDateInput.value) {
+                    const now = new Date();
+                    if (repeatType === 'yearly') {
+                        // Default to current date for yearly
+                        const year = now.getFullYear();
+                        const month = String(now.getMonth() + 1).padStart(2, '0');
+                        const day = String(now.getDate()).padStart(2, '0');
+                        nextDueDateInput.value = `${year}-${month}-${day}`;
+                    } else {
+                        // Default to current month with selected day for monthly
+                        const dayOfMonth = parseInt(document.getElementById('create_day_of_month').value) || 1;
+                        const year = now.getFullYear();
+                        const month = String(now.getMonth() + 1).padStart(2, '0');
+                        const day = String(Math.min(dayOfMonth, new Date(year, now.getMonth() + 1, 0).getDate())).padStart(2, '0');
+                        nextDueDateInput.value = `${year}-${month}-${day}`;
+                    }
+                }
             }
         }
 
-        function updateEditRepeatFields() {
-            const repeatType = document.getElementById('edit_repeat_type').value;
-            const repeatEveryGroup = document.getElementById('edit_repeat_every_group');
-            const dayOfWeekGroup = document.getElementById('edit_day_of_week_group');
-            const dayOfMonthGroup = document.getElementById('edit_day_of_month_group');
-            const repeatHint = document.getElementById('edit_repeat_hint');
-
-            if (repeatType === 'weekly') {
-                repeatEveryGroup.style.display = 'flex';
-                dayOfWeekGroup.style.display = 'flex';
-                dayOfMonthGroup.style.display = 'none';
-                repeatHint.textContent = 'Number of weeks (1-100)';
-            } else if (repeatType === 'monthly') {
-                repeatEveryGroup.style.display = 'flex';
-                dayOfWeekGroup.style.display = 'none';
-                dayOfMonthGroup.style.display = 'flex';
-                repeatHint.textContent = 'Number of months (1-100)';
-            } else if (repeatType === 'yearly') {
-                repeatEveryGroup.style.display = 'none';
-                dayOfWeekGroup.style.display = 'none';
-                dayOfMonthGroup.style.display = 'none';
-            }
+        // Check if title is filled and enable/disable submit button
+        function updateCreateSubmitButton() {
+            const title = document.getElementById('create_title').value.trim();
+            const submitBtn = document.getElementById('createSubmitBtn');
+            submitBtn.disabled = title.length === 0;
         }
 
-        // Close modals on escape key
+        // Add input listener to title field
+        document.getElementById('create_title').addEventListener('input', updateCreateSubmitButton);
+        
+        // Add event listeners to update field visibility when repeat_every changes
+        document.getElementById('create_repeat_every').addEventListener('input', updateCreateRepeatFields);
+
+        // Save preferences when create form is submitted
+        document.querySelector('#createModal form').addEventListener('submit', function() {
+            saveCreatePreferences();
+        });
+
+        // Close modals on escape key (closeCreateModal is local, closeEditModal is in shared template)
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 closeCreateModal();
-                closeEditModal();
             }
         });
+
+        // Table sorting functionality
+        let sortDirection = {}; // Track sort direction for each column
+        
+        function sortTable(columnIndex) {
+            const table = document.getElementById('timecardsTable');
+            const tbody = document.getElementById('timecardsTableBody');
+            const allRows = Array.from(tbody.querySelectorAll('tr'));
+            
+            // Group rows: each timecard row with its optional activity row
+            const rowGroups = [];
+            for (let i = 0; i < allRows.length; i++) {
+                const row = allRows[i];
+                // Check if this is a data row (has data-title attribute)
+                if (row.dataset.title) {
+                    const group = [row];
+                    // Check if next row is the activity row
+                    if (i + 1 < allRows.length && allRows[i + 1].querySelector('details')) {
+                        group.push(allRows[i + 1]);
+                        i++; // Skip the activity row in next iteration
+                    }
+                    rowGroups.push(group);
+                }
+            }
+            
+            // Toggle sort direction
+            if (!sortDirection[columnIndex]) {
+                sortDirection[columnIndex] = 'asc';
+            } else if (sortDirection[columnIndex] === 'asc') {
+                sortDirection[columnIndex] = 'desc';
+            } else {
+                sortDirection[columnIndex] = 'asc';
+            }
+            
+            const direction = sortDirection[columnIndex];
+            
+            // Clear all sort indicators
+            table.querySelectorAll('.sort-indicator').forEach(ind => ind.textContent = '');
+            
+            // Set current column indicator
+            const indicator = table.querySelectorAll('th')[columnIndex].querySelector('.sort-indicator');
+            indicator.textContent = direction === 'asc' ? ' ▲' : ' ▼';
+            
+            rowGroups.sort((a, b) => {
+                // Sort by the first row (the data row) in each group
+                const aRow = a[0];
+                const bRow = b[0];
+                let aVal, bVal;
+                
+                switch(columnIndex) {
+                    case 0: // Title
+                        aVal = aRow.dataset.title.toLowerCase();
+                        bVal = bRow.dataset.title.toLowerCase();
+                        break;
+                    case 1: // Repeat - sort by days between repeats
+                        const aType = aRow.dataset.repeatType;
+                        const bType = bRow.dataset.repeatType;
+                        const aDays = parseInt(aRow.dataset.repeatDays);
+                        const bDays = parseInt(bRow.dataset.repeatDays);
+                        
+                        // Calculate actual days between repeats
+                        let aInterval, bInterval;
+                        if (aType === 'weekly') aInterval = aDays * 7;
+                        else if (aType === 'monthly') aInterval = aDays * 30;
+                        else aInterval = 365; // yearly
+                        
+                        if (bType === 'weekly') bInterval = bDays * 7;
+                        else if (bType === 'monthly') bInterval = bDays * 30;
+                        else bInterval = 365; // yearly
+                        
+                        aVal = aInterval;
+                        bVal = bInterval;
+                        break;
+                    case 2: // Next Due
+                        aVal = new Date(aRow.dataset.nextDue);
+                        bVal = new Date(bRow.dataset.nextDue);
+                        break;
+                    case 3: // Notifications
+                        aVal = aRow.cells[3].textContent.trim();
+                        bVal = bRow.cells[3].textContent.trim();
+                        break;
+                    case 4: // Active
+                        aVal = parseInt(aRow.dataset.active);
+                        bVal = parseInt(bRow.dataset.active);
+                        break;
+                    case 5: // State
+                        const statusOrder = {
+                            'TRIGGERED': 1,
+                            'READY': 2,
+                            'DONE_SUCCESS': 3,
+                            'DONE_IGNORED': 4,
+                            'DONE_FAILED': 5
+                        };
+                        aVal = statusOrder[aRow.dataset.status] || 99;
+                        bVal = statusOrder[bRow.dataset.status] || 99;
+                        break;
+                }
+                
+                // Compare values
+                let comparison = 0;
+                if (aVal > bVal) comparison = 1;
+                if (aVal < bVal) comparison = -1;
+                
+                return direction === 'asc' ? comparison : -comparison;
+            });
+            
+            // Reorder row groups in DOM
+            rowGroups.forEach(group => {
+                group.forEach(row => tbody.appendChild(row));
+            });
+        }
 
         // Modals cannot be closed by clicking outside
 

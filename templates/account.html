@@ -7,28 +7,7 @@
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <nav class="navbar">
-        <div class="nav-brand">Time Wheel</div>
-        <div class="nav-links">
-            <a href="/dashboard" class="nav-link">Dashboard</a>
-            <a href="/timecards" class="nav-link">Time Cards</a>
-            {{if .User.IsAdmin}}
-            <a href="/admin/users" class="nav-link">Users</a>
-            {{end}}
-            <a href="/about" class="nav-link">About</a>
-        </div>
-        <div class="nav-user">
-            <span class="username">{{.User.Username}}</span>
-            <div class="dropdown">
-                <button class="dropdown-toggle">▼</button>
-                <div class="dropdown-menu">
-                    <a href="/account" class="dropdown-item active">Account Info</a>
-                    <hr class="dropdown-divider">
-                    <a href="/logout" class="dropdown-item">Logout</a>
-                </div>
-            </div>
-        </div>
-    </nav>
+    {{template "navbar" .}}
 
     <div class="container">
         <h1>Account Information</h1>
@@ -226,9 +205,7 @@
         </div>
     </div>
 
-    <footer class="footer">
-        <p>&copy; {{.Year}} Time Wheel. All rights reserved.</p>
-    </footer>
+    {{template "footer" .}}
 
     <script>
         function togglePasswordVisibility(fieldId) {

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -20,11 +21,12 @@ func TimeCardsPageHandler(w http.ResponseWriter, r *http.Request) {
 	// Get error or success message from query parameters
 	errorMsg := r.URL.Query().Get("error")
 	successMsg := r.URL.Query().Get("success")
+	completedTitle := r.URL.Query().Get("title")
 
 	// Get all time cards for the user
 	rows, err := db.DB.Query(`
 		SELECT id, title, description, send_sms, send_email, repeat_type, repeat_every, 
-		       day_of_week, day_of_month, next_due, last_sent, reminder_days, reminder_count, last_reminder_sent, is_active, created_at
+		       day_of_week, day_of_month, next_due, last_sent, reminder_days, reminder_count, last_reminder_sent, is_active, status, created_at
 		FROM time_cards 
 		WHERE user_id = ? 
 		ORDER BY next_due ASC
@@ -42,7 +44,7 @@ func TimeCardsPageHandler(w http.ResponseWriter, r *http.Request) {
 		var lastSent, lastReminderSent sql.NullTime
 		if err := rows.Scan(&tc.ID, &tc.Title, &tc.Description, &tc.SendSMS, &tc.SendEmail,
 			&tc.RepeatType, &tc.RepeatEvery, &tc.DayOfWeek, &tc.DayOfMonth,
-			&tc.NextDue, &lastSent, &tc.ReminderDays, &tc.ReminderCount, &lastReminderSent, &tc.IsActive, &tc.CreatedAt); err != nil {
+			&tc.NextDue, &lastSent, &tc.ReminderDays, &tc.ReminderCount, &lastReminderSent, &tc.IsActive, &tc.Status, &tc.CreatedAt); err != nil {
 			log.Printf("Error scanning time card: %v", err)
 			continue
 		}
@@ -52,16 +54,27 @@ func TimeCardsPageHandler(w http.ResponseWriter, r *http.Request) {
 		if lastReminderSent.Valid {
 			tc.LastReminderSent = &lastReminderSent.Time
 		}
+		// Get recent logs for this timecard
+		recentLogs, err := GetRecentLogsForTimeCard(tc.ID, 5)
+		if err != nil {
+			log.Printf("Error fetching recent logs for timecard %d: %v", tc.ID, err)
+			recentLogs = []ActivityLog{} // Empty slice if error
+		}
+		tc.RecentLogs = recentLogs
+
 		timeCards = append(timeCards, tc)
 	}
 
 	data := map[string]interface{}{
-		"Title":     "Time Cards - Time Wheel",
-		"Year":      time.Now().Year(),
-		"User":      user,
-		"TimeCards": timeCards,
-		"Error":     errorMsg,
-		"Success":   successMsg,
+		"Title":          "Time Cards - Time Wheel",
+		"Year":           time.Now().Year(),
+		"User":           user,
+		"ActivePage":     "timecards",
+		"TimeCards":      timeCards,
+		"Error":          errorMsg,
+		"Success":        successMsg,
+		"CompletedTitle": completedTitle,
+		"Now":            time.Now(),
 	}
 
 	if err := templates.ExecuteTemplate(w, "timecards.html", data); err != nil {
@@ -86,6 +99,7 @@ func CreateTimeCardHandler(w http.ResponseWriter, r *http.Request) {
 	repeatEveryStr := r.FormValue("repeat_every")
 	dayOfWeekStr := r.FormValue("day_of_week")
 	dayOfMonthStr := r.FormValue("day_of_month")
+	nextDueDateStr := r.FormValue("next_due_date")
 	reminderDaysStr := r.FormValue("reminder_days")
 
 	// Validate title
@@ -144,15 +158,27 @@ func CreateTimeCardHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Calculate next_due date
-	nextDue := calculateNextDue(repeatType, repeatEvery, dayOfWeek, dayOfMonth)
+	// Calculate next_due date - use custom date if provided, otherwise calculate
+	var nextDue time.Time
+	if nextDueDateStr != "" {
+		// Parse custom next_due_date
+		parsed, err := time.Parse("2006-01-02", nextDueDateStr)
+		if err != nil {
+			http.Redirect(w, r, "/timecards?error=invalid_next_due_date", http.StatusSeeOther)
+			return
+		}
+		nextDue = parsed
+	} else {
+		// Auto-calculate based on repeat settings
+		nextDue = calculateNextDue(repeatType, repeatEvery, dayOfWeek, dayOfMonth)
+	}
 
 	// Insert time card
 	_, err := db.DB.Exec(`
 	INSERT INTO time_cards (user_id, title, description, send_sms, send_email, 
-	                        repeat_type, repeat_every, day_of_week, day_of_month, 
-	                        next_due, reminder_days, is_active, created_at, updated_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+	                        repeat_type, repeat_every, day_of_week, day_of_month,
+	                        next_due, reminder_days, is_active, status, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'READY', ?, ?)
 `, user.ID, title, description, sendSMS, sendEmail, repeatType, repeatEvery,
 		dayOfWeek, dayOfMonth, nextDue, reminderDays, time.Now(), time.Now())
 	if err != nil {
@@ -180,6 +206,7 @@ func UpdateTimeCardHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	action := r.FormValue("action")
+	var completedTitle string // Store title for completion message
 
 	// Verify ownership
 	var ownerID int
@@ -203,6 +230,7 @@ func UpdateTimeCardHandler(w http.ResponseWriter, r *http.Request) {
 		repeatEveryStr := r.FormValue("repeat_every")
 		dayOfWeekStr := r.FormValue("day_of_week")
 		dayOfMonthStr := r.FormValue("day_of_month")
+		nextDueDateStr := r.FormValue("next_due_date")
 		reminderDaysStr := r.FormValue("reminder_days")
 
 		if title == "" {
@@ -251,12 +279,25 @@ func UpdateTimeCardHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		nextDue := calculateNextDue(repeatType, repeatEvery, dayOfWeek, dayOfMonth)
+		// Calculate next_due date - use custom date if provided, otherwise calculate
+		var nextDue time.Time
+		if nextDueDateStr != "" {
+			// Parse custom next_due_date
+			parsed, err := time.Parse("2006-01-02", nextDueDateStr)
+			if err != nil {
+				http.Redirect(w, r, "/timecards?error=invalid_next_due_date", http.StatusSeeOther)
+				return
+			}
+			nextDue = parsed
+		} else {
+			// Auto-calculate based on repeat settings
+			nextDue = calculateNextDue(repeatType, repeatEvery, dayOfWeek, dayOfMonth)
+		}
 
 		_, err = db.DB.Exec(`
 			UPDATE time_cards 
 			SET title = ?, description = ?, send_sms = ?, send_email = ?, 
-			    repeat_type = ?, repeat_every = ?, day_of_week = ?, day_of_month = ?, 
+			    repeat_type = ?, repeat_every = ?, day_of_week = ?, day_of_month = ?,
 			    next_due = ?, reminder_days = ?, updated_at = ?
 			WHERE id = ?
 		`, title, description, sendSMS, sendEmail, repeatType, repeatEvery,
@@ -264,38 +305,52 @@ func UpdateTimeCardHandler(w http.ResponseWriter, r *http.Request) {
 
 	case "toggle_active":
 		_, err = db.DB.Exec(`
-			UPDATE time_cards SET is_active = NOT is_active, updated_at = ? WHERE id = ?
+			UPDATE time_cards 
+			SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END, 
+			    updated_at = ? 
+			WHERE id = ?
 		`, time.Now(), timeCardID)
 
-	case "complete":
-		// Mark task as completed and log it
+	case "complete", "ignore", "failed":
+		// Mark task as completed/ignored/failed and log it
 		var repeatType string
 		var repeatEvery, dayOfWeek, dayOfMonth int
 		err = db.DB.QueryRow(`
-			SELECT repeat_type, repeat_every, day_of_week, day_of_month 
+			SELECT title, repeat_type, repeat_every, day_of_week, day_of_month 
 			FROM time_cards WHERE id = ?
-		`, timeCardID).Scan(&repeatType, &repeatEvery, &dayOfWeek, &dayOfMonth)
+		`, timeCardID).Scan(&completedTitle, &repeatType, &repeatEvery, &dayOfWeek, &dayOfMonth)
 
 		if err != nil {
 			http.Redirect(w, r, "/timecards?error=server_error", http.StatusSeeOther)
 			return
 		}
 
+		// Determine log message based on action
+		var logMessage string
+		switch action {
+		case "complete":
+			logMessage = "Task marked as completed successfully"
+		case "ignore":
+			logMessage = "Task marked as ignored"
+		case "failed":
+			logMessage = "Task marked as failed"
+		}
+
 		// Log the completion
 		_, err = db.DB.Exec(`
 			INSERT INTO time_card_logs (time_card_id, user_id, log_type, message, created_at)
-			VALUES (?, ?, 'completed', 'Task marked as completed', ?)
-		`, timeCardID, user.ID, time.Now())
+			VALUES (?, ?, 'completed', ?, ?)
+		`, timeCardID, user.ID, logMessage, time.Now())
 
 		if err != nil {
 			log.Printf("Error logging completion: %v", err)
 		}
 
-		// Calculate next due date and reset reminder counters
+		// Calculate next due date and reset reminder counters, set status back to READY
 		nextDue := calculateNextDue(repeatType, repeatEvery, dayOfWeek, dayOfMonth)
 		_, err = db.DB.Exec(`
 			UPDATE time_cards 
-			SET next_due = ?, last_sent = NULL, reminder_count = 0, last_reminder_sent = NULL, updated_at = ?
+			SET next_due = ?, last_sent = NULL, reminder_count = 0, last_reminder_sent = NULL, status = 'READY', updated_at = ?
 			WHERE id = ?
 		`, nextDue, time.Now(), timeCardID)
 
@@ -313,12 +368,14 @@ func UpdateTimeCardHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use different success message for completion
-	successMsg := "timecard_updated"
-	if action == "complete" {
-		successMsg = "timecard_completed"
+	// Use different success message for completion, skip for toggle_active
+	if action == "complete" || action == "ignore" || action == "failed" {
+		http.Redirect(w, r, "/timecards?success=timecard_completed&title="+url.QueryEscape(completedTitle), http.StatusSeeOther)
+	} else if action == "toggle_active" {
+		http.Redirect(w, r, "/timecards", http.StatusSeeOther)
+	} else {
+		http.Redirect(w, r, "/timecards?success=timecard_updated", http.StatusSeeOther)
 	}
-	http.Redirect(w, r, "/timecards?success="+successMsg, http.StatusSeeOther)
 }
 
 // calculateNextDue calculates the next due date based on repeat settings
@@ -340,7 +397,16 @@ func calculateNextDue(repeatType string, repeatEvery, dayOfWeek, dayOfMonth int)
 		if now.Day() >= dayOfMonth {
 			nextMonth = now.AddDate(0, repeatEvery, 0)
 		}
-		return time.Date(nextMonth.Year(), nextMonth.Month(), dayOfMonth, 0, 0, 0, 0, now.Location())
+
+		// Cap dayOfMonth to the last day of the target month
+		// E.g., if dayOfMonth is 31 but month only has 28 days, use day 28
+		lastDayOfMonth := time.Date(nextMonth.Year(), nextMonth.Month()+1, 0, 0, 0, 0, 0, now.Location()).Day()
+		actualDay := dayOfMonth
+		if dayOfMonth > lastDayOfMonth {
+			actualDay = lastDayOfMonth
+		}
+
+		return time.Date(nextMonth.Year(), nextMonth.Month(), actualDay, 0, 0, 0, 0, now.Location())
 
 	case "yearly":
 		// Next year, same month and day

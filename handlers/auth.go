@@ -352,7 +352,7 @@ func DashboardHandler(w http.ResponseWriter, r *http.Request) {
 		pinExists = false
 	}
 
-	// Get time cards due this week (all repeat types)
+	// Get time cards due this week (weekly tasks only)
 	now := time.Now()
 	endOfWeek := now.AddDate(0, 0, 7)
 
@@ -360,10 +360,10 @@ func DashboardHandler(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.DB.Query(`
 		SELECT id, user_id, title, description, send_sms, send_email, 
 		       repeat_type, repeat_every, day_of_week, day_of_month, 
-		       next_due, last_sent, reminder_days, reminder_count, last_reminder_sent, is_active, created_at, updated_at
+		       next_due, last_sent, reminder_days, reminder_count, last_reminder_sent, is_active, status, created_at, updated_at
 		FROM time_cards
-		WHERE user_id = ? AND is_active = 1 AND next_due <= ?
-		ORDER BY next_due ASC
+		WHERE user_id = ? AND is_active = 1 AND repeat_type = 'weekly' AND next_due <= ?
+		ORDER BY CAST(strftime('%w', next_due) AS INTEGER), title ASC
 	`, user.ID, endOfWeek)
 
 	if err != nil {
@@ -376,7 +376,7 @@ func DashboardHandler(w http.ResponseWriter, r *http.Request) {
 			err := rows.Scan(&card.ID, &card.UserID, &card.Title, &card.Description,
 				&card.SendSMS, &card.SendEmail, &card.RepeatType, &card.RepeatEvery,
 				&card.DayOfWeek, &card.DayOfMonth, &card.NextDue, &lastSent,
-				&card.ReminderDays, &card.ReminderCount, &lastReminderSent, &card.IsActive, &card.CreatedAt, &card.UpdatedAt)
+				&card.ReminderDays, &card.ReminderCount, &lastReminderSent, &card.IsActive, &card.Status, &card.CreatedAt, &card.UpdatedAt)
 			if err != nil {
 				log.Printf("Error scanning time card: %v", err)
 				continue
@@ -398,12 +398,12 @@ func DashboardHandler(w http.ResponseWriter, r *http.Request) {
 	rows, err = db.DB.Query(`
 		SELECT id, user_id, title, description, send_sms, send_email, 
 		       repeat_type, repeat_every, day_of_week, day_of_month, 
-		       next_due, last_sent, reminder_days, reminder_count, last_reminder_sent, is_active, created_at, updated_at
+		       next_due, last_sent, reminder_days, reminder_count, last_reminder_sent, is_active, status, created_at, updated_at
 		FROM time_cards
 		WHERE user_id = ? AND is_active = 1 
 		      AND (repeat_type = 'monthly' OR repeat_type = 'yearly')
 		      AND next_due <= ?
-		ORDER BY next_due ASC
+		ORDER BY CAST(strftime('%w', next_due) AS INTEGER), title ASC
 	`, user.ID, next10Days)
 
 	if err != nil {
@@ -416,7 +416,7 @@ func DashboardHandler(w http.ResponseWriter, r *http.Request) {
 			err := rows.Scan(&card.ID, &card.UserID, &card.Title, &card.Description,
 				&card.SendSMS, &card.SendEmail, &card.RepeatType, &card.RepeatEvery,
 				&card.DayOfWeek, &card.DayOfMonth, &card.NextDue, &lastSent,
-				&card.ReminderDays, &card.ReminderCount, &lastReminderSent, &card.IsActive, &card.CreatedAt, &card.UpdatedAt)
+				&card.ReminderDays, &card.ReminderCount, &lastReminderSent, &card.IsActive, &card.Status, &card.CreatedAt, &card.UpdatedAt)
 			if err != nil {
 				log.Printf("Error scanning time card: %v", err)
 				continue
@@ -431,16 +431,25 @@ func DashboardHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Get recent activity by timecard (last 7 days)
+	recentActivity, err := GetRecentActivityByTimeCard(user.ID, 7)
+	if err != nil {
+		log.Printf("Error fetching recent activity: %v", err)
+		recentActivity = []ActivityLog{} // Empty slice if error
+	}
+
 	data := map[string]interface{}{
-		"Title":         "Dashboard - Time Wheel",
-		"Year":          time.Now().Year(),
-		"User":          user,
-		"Message":       "Welcome to your dashboard",
-		"Error":         errorMsg,
-		"Success":       successMsg,
-		"HasPIN":        pinExists,
-		"ThisWeekCards": thisWeekCards,
-		"UpcomingCards": upcomingCards,
+		"Title":          "Dashboard - Time Wheel",
+		"Year":           time.Now().Year(),
+		"User":           user,
+		"ActivePage":     "dashboard",
+		"Message":        "Welcome to your dashboard",
+		"Error":          errorMsg,
+		"Success":        successMsg,
+		"HasPIN":         pinExists,
+		"ThisWeekCards":  thisWeekCards,
+		"UpcomingCards":  upcomingCards,
+		"RecentActivity": recentActivity,
 	}
 
 	if err := templates.ExecuteTemplate(w, "dashboard.html", data); err != nil {
@@ -468,12 +477,13 @@ func AccountHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]interface{}{
-		"Title":   "Account Info - Time Wheel",
-		"Year":    time.Now().Year(),
-		"User":    user,
-		"Error":   errorMsg,
-		"Success": successMsg,
-		"HasPIN":  pinExists,
+		"Title":      "Account Info - Time Wheel",
+		"Year":       time.Now().Year(),
+		"User":       user,
+		"ActivePage": "account",
+		"Error":      errorMsg,
+		"Success":    successMsg,
+		"HasPIN":     pinExists,
 	}
 
 	if err := templates.ExecuteTemplate(w, "account.html", data); err != nil {
@@ -515,12 +525,13 @@ func AdminPanelHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]interface{}{
-		"Title":   "Admin Panel - Time Wheel",
-		"Year":    time.Now().Year(),
-		"User":    user,
-		"Users":   users,
-		"Error":   errorMsg,
-		"Success": successMsg,
+		"Title":      "Admin Panel - Time Wheel",
+		"Year":       time.Now().Year(),
+		"User":       user,
+		"ActivePage": "admin",
+		"Users":      users,
+		"Error":      errorMsg,
+		"Success":    successMsg,
 	}
 
 	if err := templates.ExecuteTemplate(w, "admin.html", data); err != nil {

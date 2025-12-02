@@ -7,28 +7,7 @@
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <nav class="navbar">
-        <div class="nav-brand">Time Wheel</div>
-        <div class="nav-links">
-            <a href="/dashboard" class="nav-link active">Dashboard</a>
-            <a href="/timecards" class="nav-link">Time Cards</a>
-            {{if .User.IsAdmin}}
-            <a href="/admin/users" class="nav-link">Users</a>
-            {{end}}
-            <a href="/about" class="nav-link">About</a>
-        </div>
-        <div class="nav-user">
-            <span class="username">{{.User.Username}}</span>
-            <div class="dropdown">
-                <button class="dropdown-toggle">▼</button>
-                <div class="dropdown-menu">
-                    <a href="/account" class="dropdown-item">Account Info</a>
-                    <hr class="dropdown-divider">
-                    <a href="/logout" class="dropdown-item">Logout</a>
-                </div>
-            </div>
-        </div>
-    </nav>
+    {{template "navbar" .}}
 
     <div class="container">
         <div class="dashboard">
@@ -56,18 +35,31 @@
                         {{if .ThisWeekCards}}
                         <div class="timecard-list">
                             {{range .ThisWeekCards}}
-                            <div class="timecard-item">
+                            <div class="timecard-item day-{{.GetNextDueWeekday}}">
                                 <div class="timecard-header" onclick="toggleExpand(this.parentElement)">
                                     <div class="timecard-title-row">
-                                        <form method="POST" action="/timecards/update" style="display: inline; margin: 0;" onclick="event.stopPropagation();">
-                                            <input type="hidden" name="timecard_id" value="{{.ID}}">
-                                            <input type="hidden" name="action" value="complete">
-                                            <label class="checkbox-label" style="margin: 0; cursor: pointer; display: inline-flex; align-items: center;">
-                                                <input type="checkbox" onchange="this.form.submit()" title="Mark as completed" style="margin-right: 0.5rem;">
-                                                <span class="timecard-title">{{.Title}}</span>
-                                            </label>
-                                        </form>
-                                        <span class="expand-icon" style="cursor: pointer;">▼</span>
+                                        <div style="display: inline-flex; align-items: center; gap: 0.5rem;" onclick="event.stopPropagation();">
+                                            <form method="POST" action="/timecards/update" style="margin: 0;" onsubmit="return confirm('Mark this task as ' + this.querySelector('select').selectedOptions[0].text + '?');">
+                                                <input type="hidden" name="timecard_id" value="{{.ID}}">
+                                                <input type="hidden" name="action" id="action_weekly_{{.ID}}">
+                                                <select name="done_status" style="padding: 0.25rem 0.5rem; border-radius: 4px; border: 1px solid #ccc; font-size: 0.9rem; cursor: pointer;" onchange="document.getElementById('action_weekly_{{.ID}}').value = this.value; if(this.value) this.form.submit();">
+                                                    <option value="">Mark as...</option>
+                                                    <option value="complete">✓ Success</option>
+                                                    <option value="ignore">○ Ignored</option>
+                                                    <option value="failed">✗ Failed</option>
+                                                </select>
+                                            </form>
+                                            <span class="timecard-title" style="font-weight: 600; color: #333; font-size: 1.1rem;">{{.Title}}</span>
+                                        </div>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <button class="btn-icon" title="Edit" onclick="event.stopPropagation(); showEditModal({{.ID}}, '{{.Title}}', '{{.Description}}', {{.SendSMS}}, {{.SendEmail}}, '{{.RepeatType}}', {{.RepeatEvery}}, {{.DayOfWeek}}, {{.DayOfMonth}}, {{.ReminderDays}});" style="border: none; background: none; cursor: pointer; padding: 0.25rem;">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                                </svg>
+                                            </button>
+                                            <span class="expand-icon" style="cursor: pointer;">▼</span>
+                                        </div>
                                     </div>
                                     <div class="timecard-meta">
                                         <span class="timecard-due">{{.NextDue.Format "Mon, Jan 2"}}</span>
@@ -119,18 +111,31 @@
                         {{if .UpcomingCards}}
                         <div class="timecard-list">
                             {{range .UpcomingCards}}
-                            <div class="timecard-item">
+                            <div class="timecard-item day-{{.GetNextDueWeekday}}">
                                 <div class="timecard-header" onclick="toggleExpand(this.parentElement)">
                                     <div class="timecard-title-row">
-                                        <form method="POST" action="/timecards/update" style="display: inline; margin: 0;" onclick="event.stopPropagation();">
-                                            <input type="hidden" name="timecard_id" value="{{.ID}}">
-                                            <input type="hidden" name="action" value="complete">
-                                            <label class="checkbox-label" style="margin: 0; cursor: pointer; display: inline-flex; align-items: center;">
-                                                <input type="checkbox" onchange="this.form.submit()" title="Mark as completed" style="margin-right: 0.5rem;">
-                                                <span class="timecard-title">{{.Title}}</span>
-                                            </label>
-                                        </form>
-                                        <span class="expand-icon" style="cursor: pointer;">▼</span>
+                                        <div style="display: inline-flex; align-items: center; gap: 0.5rem;" onclick="event.stopPropagation();">
+                                            <form method="POST" action="/timecards/update" style="margin: 0;" onsubmit="return confirm('Mark this task as ' + this.querySelector('select').selectedOptions[0].text + '?');">
+                                                <input type="hidden" name="timecard_id" value="{{.ID}}">
+                                                <input type="hidden" name="action" id="action_monthly_{{.ID}}">
+                                                <select name="done_status" style="padding: 0.25rem 0.5rem; border-radius: 4px; border: 1px solid #ccc; font-size: 0.9rem; cursor: pointer;" onchange="document.getElementById('action_monthly_{{.ID}}').value = this.value; if(this.value) this.form.submit();">
+                                                    <option value="">Mark as...</option>
+                                                    <option value="complete">✓ Success</option>
+                                                    <option value="ignore">○ Ignored</option>
+                                                    <option value="failed">✗ Failed</option>
+                                                </select>
+                                            </form>
+                                            <span class="timecard-title" style="font-weight: 600; color: #333; font-size: 1.1rem;">{{.Title}}</span>
+                                        </div>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <button class="btn-icon" title="Edit" onclick="event.stopPropagation(); showEditModal({{.ID}}, '{{.Title}}', '{{.Description}}', {{.SendSMS}}, {{.SendEmail}}, '{{.RepeatType}}', {{.RepeatEvery}}, {{.DayOfWeek}}, {{.DayOfMonth}}, {{.ReminderDays}});" style="border: none; background: none; cursor: pointer; padding: 0.25rem;">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                                </svg>
+                                            </button>
+                                            <span class="expand-icon" style="cursor: pointer;">▼</span>
+                                        </div>
                                     </div>
                                     <div class="timecard-meta">
                                         <span class="timecard-due">{{.NextDue.Format "Mon, Jan 2"}}</span>
@@ -167,13 +172,50 @@
                         {{end}}
                     </div>
                 </div>
+
+                <!-- Recent Activity (Past 7 Days) -->
+                <div class="info-card" style="margin-top: 2rem;">
+                    <h2>Recent Activity (Past 7 Days)</h2>
+                    {{if .RecentActivity}}
+                    <div class="activity-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        {{range .RecentActivity}}
+                        <div class="activity-item" style="padding: 0.75rem; border-left: 3px solid 
+                            {{if eq .LogType "completed"}}#28a745
+                            {{else if eq .LogType "sent"}}#007bff
+                            {{else if eq .LogType "reminder_sent"}}#ffc107
+                            {{else}}#6c757d{{end}}; 
+                            background-color: #f8f9fa; border-radius: 4px;">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.25rem;">
+                                <strong style="color: #333; font-size: 1rem;">{{.TimeCardTitle}}</strong>
+                                <span style="font-size: 0.85rem; color: #666;">{{.CreatedAt.Format "Mon, Jan 2 3:04 PM"}}</span>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <span class="badge" style="padding: 0.2rem 0.5rem; border-radius: 3px; font-size: 0.8rem; font-weight: 600; 
+                                    {{if eq .LogType "completed"}}background-color: #28a745; color: white;
+                                    {{else if eq .LogType "sent"}}background-color: #007bff; color: white;
+                                    {{else if eq .LogType "reminder_sent"}}background-color: #ffc107; color: black;
+                                    {{else}}background-color: #6c757d; color: white;{{end}}">
+                                    {{if eq .LogType "completed"}}Completed
+                                    {{else if eq .LogType "sent"}}Sent
+                                    {{else if eq .LogType "reminder_sent"}}Reminder
+                                    {{else}}{{.LogType}}{{end}}
+                                </span>
+                                <span style="color: #555; font-size: 0.9rem;">{{.Message}}</span>
+                            </div>
+                        </div>
+                        {{end}}
+                    </div>
+                    {{else}}
+                    <p class="empty-message">No activity in the past 7 days</p>
+                    {{end}}
+                </div>
             </div>
         </div>
     </div>
 
-    <footer class="footer">
-        <p>&copy; {{.Year}} Time Wheel. All rights reserved.</p>
-    </footer>
+    {{template "footer" .}}
+
+    {{template "timecard_modal" .}}
 
     <script>
         // Update current time display

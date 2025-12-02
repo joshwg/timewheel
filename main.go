@@ -65,6 +65,9 @@ func main() {
 	http.HandleFunc("/timecards/create", middleware.AuthRequired(handlers.CreateTimeCardHandler))
 	http.HandleFunc("/timecards/update", middleware.AuthRequired(handlers.UpdateTimeCardHandler))
 
+	// Logs route
+	http.HandleFunc("/logs", middleware.AuthRequired(handlers.LogsPageHandler))
+
 	// Start server
 	port := ":8080"
 	log.Printf("Server starting on http://localhost%s", port)

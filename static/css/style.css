@@ -472,7 +472,6 @@ body {
 }
 
 .timecard-item {
-    background: #f8f9fa;
     border-radius: 8px;
     padding: 1rem;
     cursor: pointer;
@@ -481,7 +480,6 @@ body {
 }
 
 .timecard-item:hover {
-    background: #e9ecef;
     border-color: #0d6efd;
 }
 
@@ -844,3 +842,25 @@ body {
         grid-template-columns: 1fr;
     }
 }
+
+/* Day of week color coding for time cards - Rainbow order */
+.timecard-item.day-0 { background: #fff5f5; border-color: #ffc9c9; } /* Sunday - Red */
+.timecard-item.day-0:hover { background: #ffe3e3; border-color: #ff6b6b; }
+
+.timecard-item.day-1 { background: #fff0e6; border-color: #ffd8a8; } /* Monday - Orange */
+.timecard-item.day-1:hover { background: #ffe8cc; border-color: #ff922b; }
+
+.timecard-item.day-2 { background: #fff9db; border-color: #ffec99; } /* Tuesday - Yellow */
+.timecard-item.day-2:hover { background: #fff3bf; border-color: #ffd43b; }
+
+.timecard-item.day-3 { background: #d0f4de; border-color: #95e1d3; } /* Wednesday - Green */
+.timecard-item.day-3:hover { background: #b7f0c8; border-color: #51cf66; }
+
+.timecard-item.day-4 { background: #e0f2fe; border-color: #a5d8ff; } /* Thursday - Blue */
+.timecard-item.day-4:hover { background: #bae6fd; border-color: #339af0; }
+
+.timecard-item.day-5 { background: #e8e3f5; border-color: #d0c9e8; } /* Friday - Indigo */
+.timecard-item.day-5:hover { background: #d0c9e8; border-color: #7c5ccc; }
+
+.timecard-item.day-6 { background: #f3e5f5; border-color: #e1bee7; } /* Saturday - Violet */
+.timecard-item.day-6:hover { background: #e1bee7; border-color: #9c27b0; }

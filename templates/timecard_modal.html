@@ -1,0 +1,147 @@
+{{define "timecard_modal"}}
+<!-- Edit Time Card Modal -->
+<div id="editModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Edit Time Card</h2>
+            <button class="modal-close" onclick="closeEditModal()">&times;</button>
+        </div>
+        <form method="POST" action="/timecards/update">
+            <input type="hidden" id="edit_timecard_id" name="timecard_id">
+            <input type="hidden" name="action" value="edit">
+
+            <div class="form-group">
+                <label for="edit_title">Title *</label>
+                <input type="text" id="edit_title" name="title" required>
+            </div>
+
+            <div class="form-group">
+                <label for="edit_description">Description</label>
+                <textarea id="edit_description" name="description" rows="4"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="edit_repeat_type">Repeat *</label>
+                <select id="edit_repeat_type" name="repeat_type" onchange="updateEditRepeatFields()" required>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="edit_repeat_every_group">
+                <label for="edit_repeat_every">Every</label>
+                <input type="number" id="edit_repeat_every" name="repeat_every" min="1" max="100" value="1">
+                <small class="form-hint" id="edit_repeat_hint">Number of weeks (1-100)</small>
+            </div>
+
+            <div class="form-group" id="edit_day_of_week_group">
+                <label for="edit_day_of_week">Day of Week</label>
+                <select id="edit_day_of_week" name="day_of_week">
+                    <option value="0">Sunday</option>
+                    <option value="1">Monday</option>
+                    <option value="2">Tuesday</option>
+                    <option value="3">Wednesday</option>
+                    <option value="4">Thursday</option>
+                    <option value="5">Friday</option>
+                    <option value="6">Saturday</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="edit_day_of_month_group" style="display: none;">
+                <label for="edit_day_of_month">Day of Month</label>
+                <input type="number" id="edit_day_of_month" name="day_of_month" min="1" max="31" value="1">
+            </div>
+
+            <div class="form-group" id="edit_next_due_date_group" style="display: none;">
+                <label for="edit_next_due_date">Next Due Date</label>
+                <input type="date" id="edit_next_due_date" name="next_due_date">
+                <small class="form-hint">For multi-month repeats, set when the next occurrence should be (leave blank for auto-calculation)</small>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="edit_send_sms" name="send_sms">
+                    Send SMS notification
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="edit_send_email" name="send_email">
+                    Send Email notification
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label for="edit_reminder_days">Maximum daily reminders</label>
+                <input type="number" id="edit_reminder_days" name="reminder_days" min="0" max="10" value="0">
+                <small class="form-hint">0-10 reminders. Send up to this many daily reminders if task not completed (0 = no reminders)</small>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function showEditModal(id, title, description, sendSMS, sendEmail, repeatType, repeatEvery, dayOfWeek, dayOfMonth, reminderDays) {
+        document.getElementById('edit_timecard_id').value = id;
+        document.getElementById('edit_title').value = title;
+        document.getElementById('edit_description').value = description;
+        document.getElementById('edit_send_sms').checked = sendSMS;
+        document.getElementById('edit_send_email').checked = sendEmail;
+        document.getElementById('edit_repeat_type').value = repeatType;
+        document.getElementById('edit_repeat_every').value = repeatEvery;
+        document.getElementById('edit_day_of_week').value = dayOfWeek;
+        document.getElementById('edit_day_of_month').value = dayOfMonth;
+        document.getElementById('edit_reminder_days').value = reminderDays || 0;
+        document.getElementById('editModal').style.display = 'flex';
+        updateEditRepeatFields();
+    }
+
+    function closeEditModal() {
+        document.getElementById('editModal').style.display = 'none';
+    }
+
+    function updateEditRepeatFields() {
+        const repeatType = document.getElementById('edit_repeat_type').value;
+        const repeatEvery = parseInt(document.getElementById('edit_repeat_every').value) || 1;
+        const repeatEveryGroup = document.getElementById('edit_repeat_every_group');
+        const dayOfWeekGroup = document.getElementById('edit_day_of_week_group');
+        const dayOfMonthGroup = document.getElementById('edit_day_of_month_group');
+        const nextDueDateGroup = document.getElementById('edit_next_due_date_group');
+        const repeatHint = document.getElementById('edit_repeat_hint');
+
+        if (repeatType === 'weekly') {
+            repeatEveryGroup.style.display = 'flex';
+            dayOfWeekGroup.style.display = 'flex';
+            dayOfMonthGroup.style.display = 'none';
+            nextDueDateGroup.style.display = 'none';
+            repeatHint.textContent = 'Number of weeks (1-100)';
+        } else if (repeatType === 'monthly') {
+            repeatEveryGroup.style.display = 'flex';
+            dayOfWeekGroup.style.display = 'none';
+            dayOfMonthGroup.style.display = 'flex';
+            // Show next_due_date for multi-month repeats (every 2+ months)
+            nextDueDateGroup.style.display = repeatEvery > 1 ? 'flex' : 'none';
+            repeatHint.textContent = 'Number of months (1-100)';
+        } else if (repeatType === 'yearly') {
+            repeatEveryGroup.style.display = 'none';
+            dayOfWeekGroup.style.display = 'none';
+            dayOfMonthGroup.style.display = 'none';
+            nextDueDateGroup.style.display = 'flex';
+        }
+    }
+
+    // Close modal on escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeEditModal();
+        }
+    });
+</script>
+{{end}}
